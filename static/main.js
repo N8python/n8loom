@@ -163,7 +163,6 @@ function renderRelativeView(selectedId) {
                 await deleteNode(child.node_id);
             };
 
-            childDiv.appendChild(document.createElement('br'));
             childDiv.appendChild(childDeleteBtn);
 
             childrenDiv.appendChild(childDiv);
