@@ -2,567 +2,191 @@
 <html>
 
 <head>
-    <meta charset="UTF-8" />
-    <title>Heddle & Loom Node Editor</title>
-    <link href="https://cdn.jsdelivr.net/npm/jsplumb@2.15.6/css/jsplumbtoolkit-defaults.css" rel="stylesheet">
+    <meta charset="UTF-8">
+    <title>Node Tree Visualizer</title>
     <style>
         body {
-            font-family: system-ui, -apple-system, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             margin: 0;
             padding: 20px;
-            background: #1e1e1e;
-            color: #fff;
+            background-color: #f5f5f5;
         }
         
-        #toolbar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: #2d2d2d;
-            padding: 10px;
-            z-index: 100;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
         }
         
-        #canvas {
-            margin-top: 60px;
-            width: 100%;
-            height: calc(100vh - 80px);
-            position: relative;
-            overflow: auto;
-        }
-        
-        .node {
-            position: absolute;
-            background: #3d3d3d;
-            border: 2px solid #555;
-            border-radius: 8px;
-            min-width: 200px;
-            padding: 10px;
-            cursor: move;
-        }
-        
-        .node.root {
-            background: #2d4f3c;
-            border-color: #4CAF50;
-        }
-        
-        .node-header {
-            padding: 5px;
-            background: #444;
-            border-radius: 4px 4px 0 0;
-            margin: -10px -10px 10px -10px;
-            border-bottom: 1px solid #555;
-        }
-        
-        .node-content {
-            font-family: monospace;
-            white-space: pre-wrap;
-            max-height: 100px;
-            overflow-y: auto;
-            margin: 5px 0;
-            padding: 5px;
-            background: #2a2a2a;
-            border-radius: 4px;
-        }
-        
-        .node-controls {
-            display: flex;
-            gap: 5px;
-            margin-top: 10px;
-        }
-        
-        button {
-            background: #4a4a4a;
-            border: 1px solid #666;
-            color: #fff;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        button:hover {
-            background: #555;
-        }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: #2d2d2d;
+        .control-panel {
+            background: white;
             padding: 20px;
             border-radius: 8px;
-            z-index: 1000;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         
-        .modal-backdrop {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 999;
+        .visualization {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            min-height: 600px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
         }
         
         input,
         textarea {
-            background: #333;
-            border: 1px solid #555;
-            color: #fff;
-            padding: 5px;
-            margin: 5px 0;
-            border-radius: 4px;
             width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
         }
         
-        .endpoint {
-            width: 10px;
-            height: 10px;
-            background: #666;
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
             cursor: pointer;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        .node {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #fff;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .node:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .node.selected {
+            border: 2px solid #4CAF50;
+        }
+        
+        .tree-container {
+            padding: 20px;
+            overflow: auto;
+        }
+        
+        .status {
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+        }
+        
+        .status.success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        
+        .status.error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        
+        #tree {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .node-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .node-text {
+            flex-grow: 1;
+        }
+        
+        .node-actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .node-children {
+            margin-left: 20px;
+            border-left: 2px solid #ddd;
+            padding-left: 10px;
         }
     </style>
 </head>
 
 <body>
-    <div id="toolbar">
-        <button onclick="showNewLoomModal()">New Loom</button>
-        <span id="model-status">No model loaded</span>
+    <div class="container">
+        <div class="control-panel">
+            <h2>Control Panel</h2>
+
+            <div class="form-group">
+                <label for="modelPath">Model Path:</label>
+                <input type="text" id="modelPath" value="Llama-3.2-3B-Instruct-4bit">
+            </div>
+
+            <button onclick="loadModel()">Load Model</button>
+
+            <div class="form-group">
+                <label for="prompt">Initial Prompt:</label>
+                <textarea id="prompt" rows="4">Write a short story about a time-traveling cat.</textarea>
+            </div>
+
+            <button onclick="createLoom()">Create New Loom</button>
+
+            <div class="form-group">
+                <label for="ramifyText">Ramify Text (optional):</label>
+                <input type="text" id="ramifyText" placeholder="Enter text or leave empty for generation">
+            </div>
+
+            <div class="form-group">
+                <label for="numSamples">Number of Samples:</label>
+                <input type="number" id="numSamples" value="3" min="1" max="10">
+            </div>
+
+            <div class="form-group">
+                <label for="temperature">Temperature:</label>
+                <input type="number" id="temperature" value="0.8" min="0" max="2" step="0.1">
+            </div>
+
+            <div class="form-group">
+                <label for="maxTokens">Max Tokens:</label>
+                <input type="number" id="maxTokens" value="32" min="1">
+            </div>
+
+            <button onclick="ramifySelected()" id="ramifyBtn" disabled>Ramify Selected Node</button>
+
+            <div id="status" class="status"></div>
+        </div>
+
+        <div class="visualization">
+            <h2>Tree Visualization</h2>
+            <div id="tree" class="tree-container"></div>
+        </div>
     </div>
-
-    <div id="canvas"></div>
-
-    <!-- New Loom Modal -->
-    <div class="modal" id="newLoomModal">
-        <h3>Create New Loom</h3>
-        <div>
-            <label>Model Path:</label>
-            <input type="text" id="modelPath" value="Llama-3.2-3B-Instruct-4bit">
-        </div>
-        <div>
-            <label>Initial Prompt:</label>
-            <textarea id="initialPrompt" rows="4">Write a story about...</textarea>
-        </div>
-        <div class="node-controls">
-            <button onclick="createNewLoom()">Create</button>
-            <button onclick="hideModals()">Cancel</button>
-        </div>
-    </div>
-
-    <!-- Ramify Modal -->
-    <div class="modal" id="ramifyModal">
-        <h3>Ramify Node</h3>
-        <div>
-            <label>Custom Text (optional):</label>
-            <input type="text" id="ramifyText" placeholder="Enter text or use generation parameters below">
-        </div>
-        <div>
-            <label>Number of Generations:</label>
-            <input type="number" id="ramifyN" value="3" min="1" max="10">
-        </div>
-        <div>
-            <label>Temperature:</label>
-            <input type="number" id="ramifyTemp" value="0.8" min="0" max="2" step="0.1">
-        </div>
-        <div>
-            <label>Max Tokens:</label>
-            <input type="number" id="ramifyMaxTokens" value="32" min="1">
-        </div>
-        <div class="node-controls">
-            <button onclick="performRamify()">Ramify</button>
-            <button onclick="hideModals()">Cancel</button>
-        </div>
-    </div>
-
-    <div class="modal-backdrop" onclick="hideModals()"></div>
-
-    <script src="https://cdn.jsdelivr.net/npm/jsplumb@2.15.6/dist/js/jsplumb.min.js"></script>
-    <script>
-        const BASE_URL = 'http://localhost:8000';
-        let jsPlumbInstance;
-        let currentNodeId = null;
-        let nodes = new Map();
-
-        // Initialize jsPlumb when document is ready
-        document.addEventListener('DOMContentLoaded', () => {
-            jsPlumbInstance = jsPlumb.getInstance({
-                DragOptions: {
-                    cursor: 'pointer',
-                    zIndex: 2000
-                },
-                ConnectionOverlays: [
-                    ['Arrow', {
-                        location: 1,
-                        width: 10,
-                        length: 10
-                    }]
-                ],
-                PaintStyle: {
-                    strokeWidth: 2,
-                    stroke: '#567',
-                    outlineWidth: 1
-                },
-                Connector: ['Bezier', {
-                    curviness: 50
-                }],
-                Endpoint: ['Dot', {
-                    radius: 5
-                }],
-                EndpointStyle: {
-                    fill: '#567'
-                },
-                Anchors: ['Bottom', 'Top']
-            });
-        });
-
-        // Helper: do a JSON POST request
-        async function postJSON(url, data) {
-            const response = await fetch(url, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(data),
-            });
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Error ${response.status}: ${errorText}`);
-            }
-            return await response.json();
-        }
-
-        // Helper: do a GET request
-        async function getJSON(url) {
-            const response = await fetch(url);
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Error ${response.status}: ${errorText}`);
-            }
-            return await response.json();
-        }
-
-        // UI Helpers
-        function showModal(id) {
-            document.getElementById(id).style.display = 'block';
-            document.querySelector('.modal-backdrop').style.display = 'block';
-        }
-
-        function hideModals() {
-            document.querySelectorAll('.modal').forEach(modal => modal.style.display = 'none');
-            document.querySelector('.modal-backdrop').style.display = 'none';
-        }
-
-        function showNewLoomModal() {
-            showModal('newLoomModal');
-        }
-
-        function showRamifyModal(nodeId) {
-            currentNodeId = nodeId;
-            showModal('ramifyModal');
-        }
-
-        // Node Management
-        function createNodeElement(id, text, x, y, isRoot = false) {
-            const node = document.createElement('div');
-            node.id = id;
-            node.className = `node${isRoot ? ' root' : ''}`;
-            node.style.left = `${x}px`;
-            node.style.top = `${y}px`;
-
-            const header = document.createElement('div');
-            header.className = 'node-header';
-            header.textContent = id;
-
-            const content = document.createElement('div');
-            content.className = 'node-content';
-            content.textContent = text;
-
-            const controls = document.createElement('div');
-            controls.className = 'node-controls';
-            /*controls.innerHTML = `
-                <button onclick="showRamifyModal('${id}')">Ramify</button>
-            `;*/
-            const ramifyButton = document.createElement('button');
-            ramifyButton.textContent = 'Ramify';
-            ramifyButton.onclick = () => {
-                showRamifyModal(id)
-            };
-            controls.appendChild(ramifyButton);
-
-            node.appendChild(header);
-            node.appendChild(content);
-            node.appendChild(controls);
-
-            document.getElementById('canvas').appendChild(node);
-
-            jsPlumbInstance.draggable(node);
-            jsPlumbInstance.makeSource(node, {
-                filter: '.ep',  // Only make invisible endpoints draggable
-                anchor: 'Bottom'
-            });
-            jsPlumbInstance.makeTarget(node, {
-                anchor: 'Top'
-            });
-
-            return node;
-        }
-
-        function connectNodes(sourceId, targetId) {
-            jsPlumbInstance.connect({
-                source: sourceId,
-                target: targetId,
-                anchors: ['Bottom', 'Top']
-            });
-        }
-
-        // Create New Loom
-        async function createNewLoom() {
-            const modelPath = document.getElementById('modelPath').value;
-            const prompt = document.getElementById('initialPrompt').value;
-
-            try {
-                // First load the model
-                const modelData = await postJSON(`${BASE_URL}/load_model`, {
-                    model_path: modelPath
-                });
-
-                document.getElementById('model-status').textContent = `Model loaded: ${modelPath}`;
-
-                // Then create the loom
-                const loomData = await postJSON(`${BASE_URL}/create_loom`, {
-                    model_id: modelData.model_id,
-                    prompt: prompt
-                });
-
-                // Create root node
-                const rootNode = createNodeElement(
-                    loomData.loom_id,
-                    prompt,
-                    window.innerWidth / 2 - 100,
-                    100,
-                    true
-                );
-
-                nodes.set(loomData.loom_id, {
-                    element: rootNode,
-                    data: loomData
-                });
-
-                hideModals();
-            } catch (err) {
-                alert(`Error: ${err.message}`);
-            }
-        }
-
-        // Ramify Node
-        async function performRamify() {
-            const nodeId = currentNodeId;
-            const ramifyText = document.getElementById('ramifyText').value;
-            const n = parseInt(document.getElementById('ramifyN').value, 10);
-            const temp = parseFloat(document.getElementById('ramifyTemp').value);
-            const maxTokens = parseInt(document.getElementById('ramifyMaxTokens').value, 10);
-
-            try {
-                const body = {
-                    node_id: nodeId
-                };
-                if (ramifyText) {
-                    body.text = ramifyText;
-                } else {
-                    body.n = n;
-                    body.temp = temp;
-                    body.max_tokens = maxTokens;
-                }
-
-                const data = await postJSON(`${BASE_URL}/node/ramify`, body);
-
-                // Remove existing child nodes first
-                // Get parent node data
-                const parentNode = nodes.get(nodeId);
-                if (!parentNode) {
-                    throw new Error(`Node ${nodeId} not found in nodes Map`);
-                }
-
-                // Find and remove all descendant nodes
-                const descendants = Array.from(document.querySelectorAll('.node'))
-                    .filter(el => {
-                        const node = nodes.get(el.id);
-                        if (!node) return false;
-
-                        // Check if this node is a descendant of our target node
-                        let current = node;
-                        while (current && current.data.parent_id) {
-                            if (current.data.parent_id === nodeId) return true;
-                            current = nodes.get(current.data.parent_id);
-                        }
-                        return false;
-                    });
-
-                descendants.forEach(el => {
-                    jsPlumbInstance.remove(el);
-                    nodes.delete(el.id);
-                });
-
-                // Create new child nodes
-                const parentRect = parentNode.element.getBoundingClientRect();
-                const yOffset = 120;
-                const xSpacing = Math.max(250, parentRect.width + 20); // Ensure minimum spacing
-
-                // Handle both array and single node responses
-                const childNodes = Array.isArray(data) ? data : [data];
-                const numChildren = childNodes.length;
-                const totalWidth = (numChildren - 1) * xSpacing;
-
-                // Calculate starting X position to center children under parent
-                const startX = Math.max(
-                    50, // Minimum left margin
-                    parentRect.left + (parentRect.width / 2) - (totalWidth / 2)
-                );
-
-                childNodes.forEach((childData, i) => {
-                    // Store parent reference for hierarchy tracking
-                    childData.parent_id = nodeId;
-
-                    const x = startX + (i * xSpacing);
-                    const y = parentRect.bottom + yOffset;
-
-                    const childNode = createNodeElement(
-                        childData.node_id,
-                        childData.text,
-                        x,
-                        y
-                    );
-
-                    nodes.set(childData.node_id, {
-                        element: childNode,
-                        data: childData
-                    });
-
-                    connectNodes(nodeId, childData.node_id);
-                });
-
-                hideModals();
-            } catch (err) {
-                alert(`Error: ${err.message}`);
-            }
-        }
-
-        // Load and visualize existing loom
-        async function loadLoom(loomId) {
-            try {
-                const data = await getJSON(`${BASE_URL}/loom/${loomId}`);
-
-                // Clear existing nodes
-                document.getElementById('canvas').innerHTML = '';
-                nodes.clear();
-                jsPlumbInstance.reset();
-
-                // Create nodes recursively
-                function createNodesFromSubtree(nodeData, x, y, isRoot = false) {
-                    const node = createNodeElement(
-                        nodeData.node_id,
-                        nodeData.text,
-                        x,
-                        y,
-                        isRoot
-                    );
-
-                    nodes.set(nodeData.node_id, {
-                        element: node,
-                        data: nodeData
-                    });
-
-                    if (nodeData.children && nodeData.children.length > 0) {
-                        const numChildren = nodeData.children.length;
-                        const totalWidth = (numChildren - 1) * 250;
-                        const startX = x - totalWidth / 2;
-
-                        nodeData.children.forEach((child, i) => {
-                            const childX = startX + (i * 250);
-                            const childY = y + 120;
-                            createNodesFromSubtree(child, childX, childY);
-                            connectNodes(nodeData.node_id, child.node_id);
-                        });
-                    }
-                }
-
-                createNodesFromSubtree(data, window.innerWidth / 2 - 100, 100, true);
-
-            } catch (err) {
-                alert(`Error loading loom: ${err.message}`);
-            }
-        }
-
-        // Clip Node
-        async function clipNode(nodeId) {
-            try {
-                const data = await postJSON(`${BASE_URL}/node/clip`, {
-                    node_id: nodeId,
-                    token_limit: 32 // Default limit, could be made configurable
-                });
-
-                // Update node text
-                const node = nodes.get(nodeId);
-                if (!node) throw new Error('Node not found');
-
-                node.element.querySelector('.node-content').textContent = data.text;
-                node.data = data;
-
-                // Remove all child connections and nodes
-                const childElements = Array.from(document.querySelectorAll('.node'))
-                    .filter(el => el.id !== nodeId);
-
-                childElements.forEach(el => {
-                    jsPlumbInstance.remove(el);
-                    nodes.delete(el.id);
-                });
-
-            } catch (err) {
-                alert(`Error: ${err.message}`);
-            }
-        }
-
-        // Trim Node
-        async function trimNode(nodeId) {
-            try {
-                const data = await postJSON(`${BASE_URL}/node/trim`, {
-                    node_id: nodeId,
-                    token_trim: 10 // Default trim amount, could be made configurable
-                });
-
-                // Update node text
-                const node = nodes.get(nodeId);
-                if (!node) throw new Error('Node not found');
-
-                node.element.querySelector('.node-content').textContent = data.text;
-                node.data = data;
-
-                // Remove all child connections and nodes
-                const childElements = Array.from(document.querySelectorAll('.node'))
-                    .filter(el => el.id !== nodeId);
-
-                childElements.forEach(el => {
-                    jsPlumbInstance.remove(el);
-                    nodes.delete(el.id);
-                });
-
-            } catch (err) {
-                alert(`Error: ${err.message}`);
-            }
-        }
-
-        // Load button in toolbar
-        document.getElementById('toolbar').innerHTML += `
-            <input type="text" id="loadLoomId" placeholder="Loom ID" style="width: 200px; margin: 0 10px;">
-            <button onclick="loadLoom(document.getElementById('loadLoomId').value)">Load Loom</button>
-        `;
-    </script>
+    <script src="main.js"></script>
 </body>
 
 </html>
