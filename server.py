@@ -11,13 +11,12 @@ app = FastAPI()
 
 # For storing loaded models and created nodes.
 # In a real application, consider a proper database or other persistent store.
-model_store: Dict[str, Dict] = {}     # Map of model_id -> {"model": model, "tokenizer": tokenizer}
+model_store: Dict[str, Dict] = {}     # Map of model_path -> {"model": model, "tokenizer": tokenizer}
 loom_store: Dict[str, Loom] = {}      # Map of loom_id -> Loom (the root heddle)
 heddle_store: Dict[str, Heddle] = {}  # All nodes (including loom roots), keyed by a unique ID
 
 # Simple integer counters for unique IDs
 COUNTERS = {
-    "model_id": 0,
     "loom_id": 0,
     "heddle_id": 0
 }
@@ -104,25 +103,26 @@ def build_subtree_dict(node: Heddle, node_id: str) -> Dict:
 @app.post("/load_model", response_model=LoadModelResponse)
 def load_model(req: LoadModelRequest):
     """
-    Load a model + tokenizer using `mlx_lm.load` and store them under a new model_id.
+    Load a model + tokenizer using `mlx_lm.load` and store them under the model_path.
+    If the model is already loaded, return the existing path.
     """
-    model_id = get_next_id("model_id")
-    # load model
-    model, tokenizer = load(req.model_path)
-    model_store[model_id] = {
-        "model": model,
-        "tokenizer": tokenizer
-    }
-    return LoadModelResponse(model_id=model_id)
+    if req.model_path not in model_store:
+        # load model only if not already loaded
+        model, tokenizer = load(req.model_path)
+        model_store[req.model_path] = {
+            "model": model,
+            "tokenizer": tokenizer
+        }
+    return LoadModelResponse(model_id=req.model_path)
 
 
 @app.post("/create_loom", response_model=CreateLoomResponse)
 def create_loom(req: CreateLoomRequest):
     """
-    Create a new Loom with the given model_id and user prompt.
+    Create a new Loom with the given model_path and user prompt.
     """
     if req.model_id not in model_store:
-        raise HTTPException(status_code=400, detail="Model ID not found")
+        raise HTTPException(status_code=400, detail="Model path not found")
 
     model_data = model_store[req.model_id]
     model = model_data["model"]
