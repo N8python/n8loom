@@ -56,11 +56,9 @@ function createNodeElement(node) {
     const deleteBtn = document.createElement('button');
     deleteBtn.textContent = '🗑️';
     deleteBtn.className = 'delete-btn';
-    deleteBtn.onclick = async (e) => {
+    deleteBtn.onclick = async(e) => {
         e.stopPropagation();
-        if (confirm('Are you sure you want to delete this node and all its children?')) {
-            await deleteNode(node.node_id);
-        }
+        await deleteNode(node.node_id);
     };
     actionsDiv.appendChild(deleteBtn);
 
@@ -155,7 +153,7 @@ async function deleteNode(nodeId) {
         // Refresh the tree view
         const treeData = await getJSON(`${BASE_URL}/loom/${currentLoomId}`);
         updateTree(treeData);
-        
+
         // Clear selection if deleted node was selected
         if (selectedNode === nodeId) {
             selectedNode = null;
