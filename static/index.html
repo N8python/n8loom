@@ -303,7 +303,7 @@
 
             jsPlumbInstance.draggable(node);
             jsPlumbInstance.makeSource(node, {
-                filter: '.node-controls button',
+                filter: '.ep',  // Only make invisible endpoints draggable
                 anchor: 'Bottom'
             });
             jsPlumbInstance.makeTarget(node, {
