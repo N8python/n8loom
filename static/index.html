@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Heddle & Loom Client</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+        
+        input,
+        button,
+        select,
+        textarea {
+            margin: 5px 0;
+            padding: 5px;
+        }
+        
+        .section {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        
+        .section h2 {
+            margin-top: 0;
+        }
+        
+        .response-box {
+            background: #f7f7f7;
+            padding: 10px;
+            border: 1px solid #ddd;
+            white-space: pre-wrap;
+            /* so JSON displays nicely */
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Heddle & Loom Client</h1>
+
+    <p><strong>Server URL:</strong> <span id="base-url">http://localhost:8000</span></p>
+    <hr />
+
+    <!-- 1) Load a Model -->
+    <div class="section">
+        <h2>1. Load a Model</h2>
+        <label>Model path:</label><br />
+        <input type="text" id="load-model-path" value="Llama-3.2-3B-Instruct-4bit" style="width: 300px;" />
+        <br />
+        <button onclick="loadModel()">Load Model</button>
+        <div class="response-box" id="load-model-response"></div>
+    </div>
+
+    <!-- 2) Create a Loom -->
+    <div class="section">
+        <h2>2. Create a Loom</h2>
+        <label>Model ID:</label><br />
+        <input type="text" id="create-loom-modelid" placeholder="e.g. model_id-1" style="width: 200px;" />
+        <br />
+        <label>Prompt:</label><br />
+        <textarea id="create-loom-prompt" rows="3" cols="40">Write a short story about a time-traveling cat.</textarea>
+        <br />
+        <button onclick="createLoom()">Create Loom</button>
+        <div class="response-box" id="create-loom-response"></div>
+    </div>
+
+    <!-- 3) View a Loom (full subtree) -->
+    <div class="section">
+        <h2>3. View a Loom Subtree</h2>
+        <label>Loom ID:</label><br />
+        <input type="text" id="view-loom-id" placeholder="e.g. loom_id-1" style="width: 200px;" />
+        <br />
+        <button onclick="viewLoom()">Get Loom Subtree</button>
+        <div class="response-box" id="view-loom-response"></div>
+    </div>
+
+    <!-- 4) View a Node (basic info) -->
+    <div class="section">
+        <h2>4. View a Node</h2>
+        <label>Node ID:</label><br />
+        <input type="text" id="view-node-id" placeholder="e.g. heddle_id-1" style="width: 200px;" />
+        <br />
+        <button onclick="viewNode()">Get Node Info</button>
+        <div class="response-box" id="view-node-response"></div>
+    </div>
+
+    <!-- 5) Ramify a Node -->
+    <div class="section">
+        <h2>5. Ramify a Node</h2>
+        <label>Node ID:</label><br />
+        <input type="text" id="ramify-node-id" placeholder="e.g. heddle_id-1" style="width: 200px;" />
+        <br />
+
+        <label>Text to Add Child (optional):</label><br />
+        <input type="text" id="ramify-text" placeholder="If provided, will create a text-based child" style="width: 300px;" />
+        <p>Otherwise, set generation parameters below to sample from the model:</p>
+        <label>n:</label>
+        <input type="number" id="ramify-n" value="3" style="width: 50px;" />
+        <label>temp:</label>
+        <input type="number" step="0.1" id="ramify-temp" value="0.8" style="width: 50px;" />
+        <label>max_tokens:</label>
+        <input type="number" id="ramify-max-tokens" value="32" style="width: 60px;" />
+        <br />
+        <button onclick="ramifyNode()">Ramify Node</button>
+        <div class="response-box" id="ramify-node-response"></div>
+    </div>
+
+    <!-- 6) Clip or Trim a Node -->
+    <div class="section">
+        <h2>6. Clip or Trim a Node</h2>
+        <label>Node ID:</label><br />
+        <input type="text" id="cliptrim-node-id" placeholder="e.g. heddle_id-2" style="width: 200px;" />
+        <br />
+        <!-- Clip -->
+        <label>Clip token_limit:</label><br />
+        <input type="number" id="clip-limit" value="20" style="width: 60px;" />
+        <button onclick="clipNode()">Clip</button>
+        <br />
+        <!-- Trim -->
+        <label>Trim token_trim:</label><br />
+        <input type="number" id="trim-amount" value="10" style="width: 60px;" />
+        <button onclick="trimNode()">Trim</button>
+        <div class="response-box" id="cliptrim-response"></div>
+    </div>
+
+    <!-- 7) View a Node Subtree -->
+    <div class="section">
+        <h2>7. View a Node Subtree</h2>
+        <label>Node ID:</label><br />
+        <input type="text" id="view-subtree-node-id" placeholder="e.g. heddle_id-1" style="width: 200px;" />
+        <br />
+        <button onclick="viewNodeSubtree()">Get Subtree</button>
+        <div class="response-box" id="view-subtree-response"></div>
+    </div>
+
+    <script>
+        const BASE_URL = document.getElementById("base-url").textContent;
+
+        // Helper: do a JSON POST request
+        async function postJSON(url, data) {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(data),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Error ${response.status}: ${errorText}`);
+            }
+            return await response.json();
+        }
+
+        // Helper: do a GET request
+        async function getJSON(url) {
+            const response = await fetch(url);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Error ${response.status}: ${errorText}`);
+            }
+            return await response.json();
+        }
+
+        // 1) Load a Model
+        async function loadModel() {
+            const path = document.getElementById("load-model-path").value;
+            const respBox = document.getElementById("load-model-response");
+            respBox.textContent = "Loading model...";
+            try {
+                const data = await postJSON(`${BASE_URL}/load_model`, {
+                    model_path: path
+                });
+                respBox.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                respBox.textContent = err.message;
+            }
+        }
+
+        // 2) Create a Loom
+        async function createLoom() {
+            const modelId = document.getElementById("create-loom-modelid").value;
+            const prompt = document.getElementById("create-loom-prompt").value;
+            const respBox = document.getElementById("create-loom-response");
+            respBox.textContent = "Creating loom...";
+            try {
+                const data = await postJSON(`${BASE_URL}/create_loom`, {
+                    model_id: modelId,
+                    prompt: prompt,
+                });
+                respBox.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                respBox.textContent = err.message;
+            }
+        }
+
+        // 3) View a Loom (full subtree)
+        async function viewLoom() {
+            const loomId = document.getElementById("view-loom-id").value;
+            const respBox = document.getElementById("view-loom-response");
+            respBox.textContent = "Fetching loom subtree...";
+            try {
+                const data = await getJSON(`${BASE_URL}/loom/${loomId}`);
+                respBox.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                respBox.textContent = err.message;
+            }
+        }
+
+        // 4) View a Node
+        async function viewNode() {
+            const nodeId = document.getElementById("view-node-id").value;
+            const respBox = document.getElementById("view-node-response");
+            respBox.textContent = "Fetching node info...";
+            try {
+                const data = await getJSON(`${BASE_URL}/node/${nodeId}`);
+                respBox.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                respBox.textContent = err.message;
+            }
+        }
+
+        // 5) Ramify a Node
+        async function ramifyNode() {
+            const nodeId = document.getElementById("ramify-node-id").value;
+            const ramifyText = document.getElementById("ramify-text").value;
+            const n = parseInt(document.getElementById("ramify-n").value, 10);
+            const temp = parseFloat(document.getElementById("ramify-temp").value);
+            const max_tokens = parseInt(document.getElementById("ramify-max-tokens").value, 10);
+            const respBox = document.getElementById("ramify-node-response");
+            respBox.textContent = "Ramifying node...";
+            try {
+                const body = {
+                    node_id: nodeId
+                };
+                if (ramifyText) {
+                    // If text is provided, use that
+                    body.text = ramifyText;
+                } else {
+                    // else use generation parameters
+                    body.n = n;
+                    body.temp = temp;
+                    body.max_tokens = max_tokens;
+                }
+                const data = await postJSON(`${BASE_URL}/node/ramify`, body);
+                respBox.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                respBox.textContent = err.message;
+            }
+        }
+
+        // 6) Clip or Trim a Node
+        async function clipNode() {
+            const nodeId = document.getElementById("cliptrim-node-id").value;
+            const limit = parseInt(document.getElementById("clip-limit").value, 10);
+            const respBox = document.getElementById("cliptrim-response");
+            respBox.textContent = "Clipping node...";
+            try {
+                const data = await postJSON(`${BASE_URL}/node/clip`, {
+                    node_id: nodeId,
+                    token_limit: limit
+                });
+                respBox.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                respBox.textContent = err.message;
+            }
+        }
+
+        async function trimNode() {
+            const nodeId = document.getElementById("cliptrim-node-id").value;
+            const trimAmt = parseInt(document.getElementById("trim-amount").value, 10);
+            const respBox = document.getElementById("cliptrim-response");
+            respBox.textContent = "Trimming node...";
+            try {
+                const data = await postJSON(`${BASE_URL}/node/trim`, {
+                    node_id: nodeId,
+                    token_trim: trimAmt
+                });
+                respBox.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                respBox.textContent = err.message;
+            }
+        }
+
+        // 7) View Node Subtree
+        async function viewNodeSubtree() {
+            const nodeId = document.getElementById("view-subtree-node-id").value;
+            const respBox = document.getElementById("view-subtree-response");
+            respBox.textContent = "Fetching node subtree...";
+            try {
+                const data = await getJSON(`${BASE_URL}/node/${nodeId}/subtree`);
+                respBox.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                respBox.textContent = err.message;
+            }
+        }
+    </script>
+</body>
+
+</html>
