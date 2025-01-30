@@ -365,21 +365,52 @@
                 
                 const data = await postJSON(`${BASE_URL}/node/ramify`, body);
                 
-                // Create child nodes
+                // Remove existing child nodes first
                 const parentNode = nodes.get(nodeId);
                 if (!parentNode) throw new Error('Parent node not found');
                 
-                const yOffset = 120;
-                const xSpacing = 250;
-                const parentRect = parentNode.element.getBoundingClientRect();
-                const numChildren = Array.isArray(data) ? data.length : 1;
-                const totalWidth = (numChildren - 1) * xSpacing;
-                const startX = parentRect.left - totalWidth/2;
+                // Find and remove all descendant nodes
+                const descendants = Array.from(document.querySelectorAll('.node'))
+                    .filter(el => {
+                        const node = nodes.get(el.id);
+                        if (!node) return false;
+                        
+                        // Check if this node is a descendant of our target node
+                        let current = node;
+                        while (current && current.data.parent_id) {
+                            if (current.data.parent_id === nodeId) return true;
+                            current = nodes.get(current.data.parent_id);
+                        }
+                        return false;
+                    });
                 
+                descendants.forEach(el => {
+                    jsPlumbInstance.remove(el);
+                    nodes.delete(el.id);
+                });
+                
+                // Create new child nodes
+                const parentRect = parentNode.element.getBoundingClientRect();
+                const yOffset = 120;
+                const xSpacing = Math.max(250, parentRect.width + 20); // Ensure minimum spacing
+                
+                // Handle both array and single node responses
                 const childNodes = Array.isArray(data) ? data : [data];
+                const numChildren = childNodes.length;
+                const totalWidth = (numChildren - 1) * xSpacing;
+                
+                // Calculate starting X position to center children under parent
+                const startX = Math.max(
+                    50, // Minimum left margin
+                    parentRect.left + (parentRect.width/2) - (totalWidth/2)
+                );
+                
                 childNodes.forEach((childData, i) => {
+                    // Store parent reference for hierarchy tracking
+                    childData.parent_id = nodeId;
+                    
                     const x = startX + (i * xSpacing);
-                    const y = parentRect.top + yOffset;
+                    const y = parentRect.bottom + yOffset;
                     
                     const childNode = createNodeElement(
                         childData.node_id,
