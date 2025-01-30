@@ -192,18 +192,31 @@
         // Initialize jsPlumb when document is ready
         document.addEventListener('DOMContentLoaded', () => {
             jsPlumbInstance = jsPlumb.getInstance({
-                DragOptions: { cursor: 'pointer', zIndex: 2000 },
+                DragOptions: {
+                    cursor: 'pointer',
+                    zIndex: 2000
+                },
                 ConnectionOverlays: [
-                    ['Arrow', { location: 1, width: 10, length: 10 }]
+                    ['Arrow', {
+                        location: 1,
+                        width: 10,
+                        length: 10
+                    }]
                 ],
-                PaintStyle: { 
+                PaintStyle: {
                     strokeWidth: 2,
                     stroke: '#567',
                     outlineWidth: 1
                 },
-                Connector: ['Bezier', { curviness: 50 }],
-                Endpoint: ['Dot', { radius: 5 }],
-                EndpointStyle: { fill: '#567' },
+                Connector: ['Bezier', {
+                    curviness: 50
+                }],
+                Endpoint: ['Dot', {
+                    radius: 5
+                }],
+                EndpointStyle: {
+                    fill: '#567'
+                },
                 Anchors: ['Bottom', 'Top']
             });
         });
@@ -261,29 +274,33 @@
             node.className = `node${isRoot ? ' root' : ''}`;
             node.style.left = `${x}px`;
             node.style.top = `${y}px`;
-            
+
             const header = document.createElement('div');
             header.className = 'node-header';
             header.textContent = id;
-            
+
             const content = document.createElement('div');
             content.className = 'node-content';
             content.textContent = text;
-            
+
             const controls = document.createElement('div');
             controls.className = 'node-controls';
-            controls.innerHTML = `
+            /*controls.innerHTML = `
                 <button onclick="showRamifyModal('${id}')">Ramify</button>
-                <button onclick="clipNode('${id}')">Clip</button>
-                <button onclick="trimNode('${id}')">Trim</button>
-            `;
-            
+            `;*/
+            const ramifyButton = document.createElement('button');
+            ramifyButton.textContent = 'Ramify';
+            ramifyButton.onclick = () => {
+                showRamifyModal(id)
+            };
+            controls.appendChild(ramifyButton);
+
             node.appendChild(header);
             node.appendChild(content);
             node.appendChild(controls);
-            
+
             document.getElementById('canvas').appendChild(node);
-            
+
             jsPlumbInstance.draggable(node);
             jsPlumbInstance.makeSource(node, {
                 filter: '.node-controls button',
@@ -292,7 +309,7 @@
             jsPlumbInstance.makeTarget(node, {
                 anchor: 'Top'
             });
-            
+
             return node;
         }
 
@@ -308,35 +325,35 @@
         async function createNewLoom() {
             const modelPath = document.getElementById('modelPath').value;
             const prompt = document.getElementById('initialPrompt').value;
-            
+
             try {
                 // First load the model
                 const modelData = await postJSON(`${BASE_URL}/load_model`, {
                     model_path: modelPath
                 });
-                
+
                 document.getElementById('model-status').textContent = `Model loaded: ${modelPath}`;
-                
+
                 // Then create the loom
                 const loomData = await postJSON(`${BASE_URL}/create_loom`, {
                     model_id: modelData.model_id,
                     prompt: prompt
                 });
-                
+
                 // Create root node
                 const rootNode = createNodeElement(
                     loomData.loom_id,
                     prompt,
-                    window.innerWidth/2 - 100,
+                    window.innerWidth / 2 - 100,
                     100,
                     true
                 );
-                
+
                 nodes.set(loomData.loom_id, {
                     element: rootNode,
                     data: loomData
                 });
-                
+
                 hideModals();
             } catch (err) {
                 alert(`Error: ${err.message}`);
@@ -350,7 +367,7 @@
             const n = parseInt(document.getElementById('ramifyN').value, 10);
             const temp = parseFloat(document.getElementById('ramifyTemp').value);
             const maxTokens = parseInt(document.getElementById('ramifyMaxTokens').value, 10);
-            
+
             try {
                 const body = {
                     node_id: nodeId
@@ -362,19 +379,19 @@
                     body.temp = temp;
                     body.max_tokens = maxTokens;
                 }
-                
+
                 const data = await postJSON(`${BASE_URL}/node/ramify`, body);
-                
+
                 // Remove existing child nodes first
                 const parentNode = nodes.get(nodeId);
                 if (!parentNode) throw new Error('Parent node not found');
-                
+
                 // Find and remove all descendant nodes
                 const descendants = Array.from(document.querySelectorAll('.node'))
                     .filter(el => {
                         const node = nodes.get(el.id);
                         if (!node) return false;
-                        
+
                         // Check if this node is a descendant of our target node
                         let current = node;
                         while (current && current.data.parent_id) {
@@ -383,50 +400,50 @@
                         }
                         return false;
                     });
-                
+
                 descendants.forEach(el => {
                     jsPlumbInstance.remove(el);
                     nodes.delete(el.id);
                 });
-                
+
                 // Create new child nodes
                 const parentRect = parentNode.element.getBoundingClientRect();
                 const yOffset = 120;
                 const xSpacing = Math.max(250, parentRect.width + 20); // Ensure minimum spacing
-                
+
                 // Handle both array and single node responses
                 const childNodes = Array.isArray(data) ? data : [data];
                 const numChildren = childNodes.length;
                 const totalWidth = (numChildren - 1) * xSpacing;
-                
+
                 // Calculate starting X position to center children under parent
                 const startX = Math.max(
                     50, // Minimum left margin
-                    parentRect.left + (parentRect.width/2) - (totalWidth/2)
+                    parentRect.left + (parentRect.width / 2) - (totalWidth / 2)
                 );
-                
+
                 childNodes.forEach((childData, i) => {
                     // Store parent reference for hierarchy tracking
                     childData.parent_id = nodeId;
-                    
+
                     const x = startX + (i * xSpacing);
                     const y = parentRect.bottom + yOffset;
-                    
+
                     const childNode = createNodeElement(
                         childData.node_id,
                         childData.text,
                         x,
                         y
                     );
-                    
+
                     nodes.set(childData.node_id, {
                         element: childNode,
                         data: childData
                     });
-                    
+
                     connectNodes(nodeId, childData.node_id);
                 });
-                
+
                 hideModals();
             } catch (err) {
                 alert(`Error: ${err.message}`);
@@ -437,12 +454,12 @@
         async function loadLoom(loomId) {
             try {
                 const data = await getJSON(`${BASE_URL}/loom/${loomId}`);
-                
+
                 // Clear existing nodes
                 document.getElementById('canvas').innerHTML = '';
                 nodes.clear();
                 jsPlumbInstance.reset();
-                
+
                 // Create nodes recursively
                 function createNodesFromSubtree(nodeData, x, y, isRoot = false) {
                     const node = createNodeElement(
@@ -452,17 +469,17 @@
                         y,
                         isRoot
                     );
-                    
+
                     nodes.set(nodeData.node_id, {
                         element: node,
                         data: nodeData
                     });
-                    
+
                     if (nodeData.children && nodeData.children.length > 0) {
                         const numChildren = nodeData.children.length;
                         const totalWidth = (numChildren - 1) * 250;
-                        const startX = x - totalWidth/2;
-                        
+                        const startX = x - totalWidth / 2;
+
                         nodeData.children.forEach((child, i) => {
                             const childX = startX + (i * 250);
                             const childY = y + 120;
@@ -471,9 +488,9 @@
                         });
                     }
                 }
-                
-                createNodesFromSubtree(data, window.innerWidth/2 - 100, 100, true);
-                
+
+                createNodesFromSubtree(data, window.innerWidth / 2 - 100, 100, true);
+
             } catch (err) {
                 alert(`Error loading loom: ${err.message}`);
             }
@@ -486,23 +503,23 @@
                     node_id: nodeId,
                     token_limit: 32 // Default limit, could be made configurable
                 });
-                
+
                 // Update node text
                 const node = nodes.get(nodeId);
                 if (!node) throw new Error('Node not found');
-                
+
                 node.element.querySelector('.node-content').textContent = data.text;
                 node.data = data;
-                
+
                 // Remove all child connections and nodes
                 const childElements = Array.from(document.querySelectorAll('.node'))
                     .filter(el => el.id !== nodeId);
-                
+
                 childElements.forEach(el => {
                     jsPlumbInstance.remove(el);
                     nodes.delete(el.id);
                 });
-                
+
             } catch (err) {
                 alert(`Error: ${err.message}`);
             }
@@ -515,23 +532,23 @@
                     node_id: nodeId,
                     token_trim: 10 // Default trim amount, could be made configurable
                 });
-                
+
                 // Update node text
                 const node = nodes.get(nodeId);
                 if (!node) throw new Error('Node not found');
-                
+
                 node.element.querySelector('.node-content').textContent = data.text;
                 node.data = data;
-                
+
                 // Remove all child connections and nodes
                 const childElements = Array.from(document.querySelectorAll('.node'))
                     .filter(el => el.id !== nodeId);
-                
+
                 childElements.forEach(el => {
                     jsPlumbInstance.remove(el);
                     nodes.delete(el.id);
                 });
-                
+
             } catch (err) {
                 alert(`Error: ${err.message}`);
             }
