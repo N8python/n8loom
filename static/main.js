@@ -158,6 +158,7 @@ function renderRelativeView(selectedId) {
             const childDeleteBtn = document.createElement('button');
             childDeleteBtn.className = 'delete-btn';
             childDeleteBtn.textContent = '🗑️';
+            childDeleteBtn.style.width = 'fit-content';
             childDeleteBtn.onclick = async(e) => {
                 e.stopPropagation();
                 await deleteNode(child.node_id);
