@@ -231,6 +231,40 @@ def trim_node(req: TrimRequest):
     node.trim(req.token_trim)
     return {"node_id": req.node_id, "trimmed_tokens": req.token_trim}
 
+@app.delete("/node/{node_id}")
+def delete_node(node_id: str):
+    """
+    Delete a node and its children from the store.
+    Cannot delete root nodes of looms.
+    """
+    if node_id not in heddle_store:
+        raise HTTPException(status_code=404, detail="Node not found")
+    
+    # Check if this is a root node
+    node = heddle_store[node_id]
+    for loom in loom_store.values():
+        if node is loom:
+            raise HTTPException(status_code=400, detail="Cannot delete root node")
+    
+    # Recursively collect all child node IDs
+    def get_child_ids(node):
+        children = []
+        for child_id, child in heddle_store.items():
+            if child.parent is node:
+                children.append(child_id)
+                children.extend(get_child_ids(child))
+        return children
+    
+    # Delete all children first
+    child_ids = get_child_ids(node)
+    for child_id in child_ids:
+        del heddle_store[child_id]
+    
+    # Delete the node itself
+    del heddle_store[node_id]
+    
+    return {"node_id": node_id, "deleted_children": child_ids}
+
 
 @app.get("/node/{node_id}/subtree")
 def get_subtree(node_id: str):

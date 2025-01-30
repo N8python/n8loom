@@ -52,6 +52,18 @@ function createNodeElement(node) {
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'node-actions';
 
+    // Add delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = '🗑️';
+    deleteBtn.className = 'delete-btn';
+    deleteBtn.onclick = async (e) => {
+        e.stopPropagation();
+        if (confirm('Are you sure you want to delete this node and all its children?')) {
+            await deleteNode(node.node_id);
+        }
+    };
+    actionsDiv.appendChild(deleteBtn);
+
     nodeDiv.onclick = (e) => {
         e.stopPropagation();
         selectNode(node.node_id);
@@ -129,6 +141,28 @@ async function createLoom() {
         updateTree(treeData);
 
         showStatus(`Loom created successfully: ${currentLoomId}`);
+    } catch (error) {
+        showStatus(error.message, true);
+    }
+}
+
+async function deleteNode(nodeId) {
+    try {
+        await fetch(`${BASE_URL}/node/${nodeId}`, {
+            method: 'DELETE'
+        });
+
+        // Refresh the tree view
+        const treeData = await getJSON(`${BASE_URL}/loom/${currentLoomId}`);
+        updateTree(treeData);
+        
+        // Clear selection if deleted node was selected
+        if (selectedNode === nodeId) {
+            selectedNode = null;
+            document.getElementById('ramifyBtn').disabled = true;
+        }
+
+        showStatus('Node deleted successfully');
     } catch (error) {
         showStatus(error.message, true);
     }
