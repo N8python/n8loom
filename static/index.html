@@ -185,6 +185,28 @@
     <script src="https://cdn.jsdelivr.net/npm/jsplumb@2.15.6/dist/js/jsplumb.min.js"></script>
     <script>
         const BASE_URL = 'http://localhost:8000';
+        let jsPlumbInstance;
+        let currentNodeId = null;
+        let nodes = new Map();
+
+        // Initialize jsPlumb when document is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            jsPlumbInstance = jsPlumb.getInstance({
+                DragOptions: { cursor: 'pointer', zIndex: 2000 },
+                ConnectionOverlays: [
+                    ['Arrow', { location: 1, width: 10, length: 10 }]
+                ],
+                PaintStyle: { 
+                    strokeWidth: 2,
+                    stroke: '#567',
+                    outlineWidth: 1
+                },
+                Connector: ['Bezier', { curviness: 50 }],
+                Endpoint: ['Dot', { radius: 5 }],
+                EndpointStyle: { fill: '#567' },
+                Anchors: ['Bottom', 'Top']
+            });
+        });
 
         // Helper: do a JSON POST request
         async function postJSON(url, data) {
@@ -212,7 +234,77 @@
             return await response.json();
         }
 
-        // 1) Load a Model
+        // UI Helpers
+        function showModal(id) {
+            document.getElementById(id).style.display = 'block';
+            document.querySelector('.modal-backdrop').style.display = 'block';
+        }
+
+        function hideModals() {
+            document.querySelectorAll('.modal').forEach(modal => modal.style.display = 'none');
+            document.querySelector('.modal-backdrop').style.display = 'none';
+        }
+
+        function showNewLoomModal() {
+            showModal('newLoomModal');
+        }
+
+        function showRamifyModal(nodeId) {
+            currentNodeId = nodeId;
+            showModal('ramifyModal');
+        }
+
+        // Node Management
+        function createNodeElement(id, text, x, y, isRoot = false) {
+            const node = document.createElement('div');
+            node.id = id;
+            node.className = `node${isRoot ? ' root' : ''}`;
+            node.style.left = `${x}px`;
+            node.style.top = `${y}px`;
+            
+            const header = document.createElement('div');
+            header.className = 'node-header';
+            header.textContent = id;
+            
+            const content = document.createElement('div');
+            content.className = 'node-content';
+            content.textContent = text;
+            
+            const controls = document.createElement('div');
+            controls.className = 'node-controls';
+            controls.innerHTML = `
+                <button onclick="showRamifyModal('${id}')">Ramify</button>
+                <button onclick="clipNode('${id}')">Clip</button>
+                <button onclick="trimNode('${id}')">Trim</button>
+            `;
+            
+            node.appendChild(header);
+            node.appendChild(content);
+            node.appendChild(controls);
+            
+            document.getElementById('canvas').appendChild(node);
+            
+            jsPlumbInstance.draggable(node);
+            jsPlumbInstance.makeSource(node, {
+                filter: '.node-controls button',
+                anchor: 'Bottom'
+            });
+            jsPlumbInstance.makeTarget(node, {
+                anchor: 'Top'
+            });
+            
+            return node;
+        }
+
+        function connectNodes(sourceId, targetId) {
+            jsPlumbInstance.connect({
+                source: sourceId,
+                target: targetId,
+                anchors: ['Bottom', 'Top']
+            });
+        }
+
+        // API Integration
         async function loadModel() {
             const path = document.getElementById("load-model-path").value;
             const respBox = document.getElementById("load-model-response");
