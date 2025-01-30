@@ -2,6 +2,7 @@ const BASE_URL = 'http://localhost:8000';
 let selectedNode = null;
 let currentModelId = null;
 let currentLoomId = null;
+let loomData = null; // Will store the entire tree structure once fetched
 
 // Helper functions for API calls
 async function postJSON(url, data) {
@@ -30,82 +31,175 @@ async function getJSON(url) {
     return await response.json();
 }
 
-// UI helper functions
 function showStatus(message, isError = false) {
     const status = document.getElementById('status');
     status.textContent = message;
-    status.className = `status ${isError ? 'error' : 'success'}`;
+    status.className = 'status ' + (isError ? 'error' : 'success');
 }
 
-function createNodeElement(node) {
-    const nodeDiv = document.createElement('div');
-    nodeDiv.className = 'node';
-    nodeDiv.id = node.node_id;
+// ------------------ Tree Rendering Logic ------------------
 
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'node-content';
-
-    const textDiv = document.createElement('div');
-    textDiv.className = 'node-text';
-    textDiv.textContent = node.text || 'Empty node';
-
-    const actionsDiv = document.createElement('div');
-    actionsDiv.className = 'node-actions';
-
-    // Add delete button
-    const deleteBtn = document.createElement('button');
-    deleteBtn.textContent = '🗑️';
-    deleteBtn.className = 'delete-btn';
-    deleteBtn.onclick = async(e) => {
-        e.stopPropagation();
-        await deleteNode(node.node_id);
-    };
-    actionsDiv.appendChild(deleteBtn);
-
-    nodeDiv.onclick = (e) => {
-        e.stopPropagation();
-        selectNode(node.node_id);
-    };
-
-    contentDiv.appendChild(textDiv);
-    contentDiv.appendChild(actionsDiv);
-    nodeDiv.appendChild(contentDiv);
-
-    if (node.children && node.children.length > 0) {
-        const childrenDiv = document.createElement('div');
-        childrenDiv.className = 'node-children';
-        node.children.forEach(child => {
-            childrenDiv.appendChild(createNodeElement(child));
-        });
-        nodeDiv.appendChild(childrenDiv);
+// Recursively search for node + path from root to nodeId
+function findNodeAndPath(root, targetId, path = []) {
+    // If this is the node
+    if (root.node_id === targetId) {
+        return [...path, root];
     }
 
-    return nodeDiv;
+    // If children exist, search them
+    if (root.children) {
+        for (let child of root.children) {
+            const result = findNodeAndPath(child, targetId, [...path, root]);
+            if (result) {
+                return result;
+            }
+        }
+    }
+    return null; // Not found in this branch
 }
 
-function updateTree(treeData) {
+/**
+ * Renders the entire "relative" view inside #tree:
+ *  1) All ancestor texts (including selected) concatenated at the top
+ *     - Each ancestor's text is in its own clickable <span>.
+ *  2) The selected node in the center
+ *  3) The immediate children below
+ */
+function renderRelativeView(selectedId) {
     const treeContainer = document.getElementById('tree');
     treeContainer.innerHTML = '';
-    treeContainer.appendChild(createNodeElement(treeData));
+
+    // If no data or no selected node, just return
+    if (!loomData || !selectedId) {
+        return;
+    }
+
+    const path = findNodeAndPath(loomData, selectedId);
+    if (!path) {
+        treeContainer.textContent = 'Selected node not found.';
+        return;
+    }
+
+    // 1) Build a parent text container
+    const parentsDiv = document.createElement('div');
+    parentsDiv.className = 'parents-text';
+
+    // For each ancestor node, create a span that:
+    //    - shows node.text
+    //    - highlights on hover
+    //    - on click, re-selects that ancestor
+    path.forEach((node, index) => {
+        const span = document.createElement('span');
+        if (index === path.length - 1) {
+            span.classList.add('selected-chunk');
+        } else {
+            span.classList.add('ancestor-chunk');
+        }
+        // Add a space after each node's text except maybe the last
+        span.textContent = (node.text || 'Empty node') + ' ';
+
+        // Clicking on this chunk re-selects that node
+        span.onclick = (e) => {
+            e.stopPropagation();
+            selectNode(node.node_id);
+        };
+        parentsDiv.appendChild(span);
+    });
+
+    // Add the parentsDiv to the DOM
+    treeContainer.appendChild(parentsDiv);
+
+    // 2) The selected node (last in path)
+    const selectedNodeData = path[path.length - 1];
+
+    const selectedDiv = document.createElement('div');
+    selectedDiv.className = 'selected-node';
+
+
+    // Create a delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'delete-btn';
+    deleteBtn.textContent = '🗑️';
+    deleteBtn.onclick = async(e) => {
+        e.stopPropagation();
+        selectNode(path[path.length - 2].node_id);
+        await deleteNode(selectedNodeData.node_id);
+    };
+    if (path.length > 1) {
+        selectedDiv.appendChild(deleteBtn);
+    }
+
+    const ramifyBtn = document.createElement('button');
+    ramifyBtn.className = 'ramify-btn';
+    ramifyBtn.textContent = '🌱';
+    ramifyBtn.onclick = async(e) => {
+        e.stopPropagation();
+        await ramifySelected();
+    }
+    selectedDiv.appendChild(ramifyBtn);
+
+    // 3) Children of this node
+    const childrenDiv = document.createElement('div');
+    childrenDiv.className = 'children-container';
+
+    if (selectedNodeData.children && selectedNodeData.children.length > 0) {
+        selectedNodeData.children.forEach(child => {
+            const childDiv = document.createElement('div');
+            childDiv.className = 'child-node';
+            childDiv.textContent = child.text || 'Empty child';
+
+            // Clicking a child sets it as selected
+            childDiv.onclick = (e) => {
+                e.stopPropagation();
+                selectNode(child.node_id);
+            };
+
+            // Add a delete button for this child
+            const childDeleteBtn = document.createElement('button');
+            childDeleteBtn.className = 'delete-btn';
+            childDeleteBtn.textContent = '🗑️';
+            childDeleteBtn.onclick = async(e) => {
+                e.stopPropagation();
+                await deleteNode(child.node_id);
+            };
+
+            childDiv.appendChild(document.createElement('br'));
+            childDiv.appendChild(childDeleteBtn);
+
+            childrenDiv.appendChild(childDiv);
+        });
+    }
+
+    parentsDiv.appendChild(selectedDiv);
+    treeContainer.appendChild(childrenDiv);
 }
 
+/**
+ * Updates the global loomData and triggers rendering of the relative view.
+ * If there is no selected node, we set it to the root node (loomData.node_id).
+ */
+function updateTree(treeData) {
+    loomData = treeData;
+
+    // If there is no current selection, default to the root node
+    if (!selectedNode) {
+        selectedNode = loomData.node_id;
+    }
+
+    renderRelativeView(selectedNode);
+}
+
+/**
+ * Sets the selected node and re-renders the relative view.
+ */
 function selectNode(nodeId) {
-    // Clear previous selection
-    const previousSelected = document.querySelector('.node.selected');
-    if (previousSelected) {
-        previousSelected.classList.remove('selected');
-    }
-
-    // Set new selection
-    const nodeElement = document.getElementById(nodeId);
-    if (nodeElement) {
-        nodeElement.classList.add('selected');
-        selectedNode = nodeId;
-        document.getElementById('ramifyBtn').disabled = false;
-    }
+    selectedNode = nodeId;
+    renderRelativeView(selectedNode);
 }
 
-// Main functionality
+
+// ------------------ API Wrappers ------------------
+
 async function loadModel() {
     try {
         const modelPath = document.getElementById('modelPath').value;
@@ -150,14 +244,14 @@ async function deleteNode(nodeId) {
             method: 'DELETE'
         });
 
-        // Refresh the tree view
+        // Refresh the tree
         const treeData = await getJSON(`${BASE_URL}/loom/${currentLoomId}`);
         updateTree(treeData);
 
-        // Clear selection if deleted node was selected
+        // If we deleted the currently selected node, reset selection to root
         if (selectedNode === nodeId) {
-            selectedNode = null;
-            document.getElementById('ramifyBtn').disabled = true;
+            selectedNode = loomData.node_id;
+            renderRelativeView(selectedNode);
         }
 
         showStatus('Node deleted successfully');
@@ -174,21 +268,21 @@ async function ramifySelected() {
 
     try {
         const ramifyText = document.getElementById('ramifyText').value;
-        const body = {
-            node_id: selectedNode
-        };
+        const body = { node_id: selectedNode };
 
         if (ramifyText) {
+            // If user provided custom text
             body.text = ramifyText;
         } else {
-            body.n = parseInt(document.getElementById('numSamples').value);
+            // Otherwise generate new text from the model
+            body.n = parseInt(document.getElementById('numSamples').value, 10);
             body.temp = parseFloat(document.getElementById('temperature').value);
-            body.max_tokens = parseInt(document.getElementById('maxTokens').value);
+            body.max_tokens = parseInt(document.getElementById('maxTokens').value, 10);
         }
 
         await postJSON(`${BASE_URL}/node/ramify`, body);
 
-        // Refresh the tree view
+        // Refresh the tree
         const treeData = await getJSON(`${BASE_URL}/loom/${currentLoomId}`);
         updateTree(treeData);
 
@@ -198,8 +292,11 @@ async function ramifySelected() {
     }
 }
 
-// Initialize the UI
+// On DOM load
 document.addEventListener('DOMContentLoaded', () => {
-    // Disable ramify button initially
+    // Disable the ramify button unless we have a selected node
     document.getElementById('ramifyBtn').disabled = true;
+    setInterval(() => {
+        document.getElementById('ramifyBtn').disabled = !selectedNode;
+    }, 200);
 });
