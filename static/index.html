@@ -304,22 +304,46 @@
             });
         }
 
-        // API Integration
-        async function loadModel() {
-            const path = document.getElementById("load-model-path").value;
-            const respBox = document.getElementById("load-model-response");
-            respBox.textContent = "Loading model...";
+        // Create New Loom
+        async function createNewLoom() {
+            const modelPath = document.getElementById('modelPath').value;
+            const prompt = document.getElementById('initialPrompt').value;
+            
             try {
-                const data = await postJSON(`${BASE_URL}/load_model`, {
-                    model_path: path
+                // First load the model
+                const modelData = await postJSON(`${BASE_URL}/load_model`, {
+                    model_path: modelPath
                 });
-                respBox.textContent = JSON.stringify(data, null, 2);
+                
+                document.getElementById('model-status').textContent = `Model loaded: ${modelPath}`;
+                
+                // Then create the loom
+                const loomData = await postJSON(`${BASE_URL}/create_loom`, {
+                    model_id: modelData.model_id,
+                    prompt: prompt
+                });
+                
+                // Create root node
+                const rootNode = createNodeElement(
+                    loomData.loom_id,
+                    prompt,
+                    window.innerWidth/2 - 100,
+                    100,
+                    true
+                );
+                
+                nodes.set(loomData.loom_id, {
+                    element: rootNode,
+                    data: loomData
+                });
+                
+                hideModals();
             } catch (err) {
-                respBox.textContent = err.message;
+                alert(`Error: ${err.message}`);
             }
         }
 
-        // 2) Create a Loom
+        // Ramify Node
         async function createLoom() {
             const modelId = document.getElementById("create-loom-modelid").value;
             const prompt = document.getElementById("create-loom-prompt").value;
