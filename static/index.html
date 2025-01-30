@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="UTF-8" />
     <title>Heddle & Loom Node Editor</title>
@@ -12,7 +13,7 @@
             background: #1e1e1e;
             color: #fff;
         }
-
+        
         #toolbar {
             position: fixed;
             top: 0;
@@ -21,9 +22,9 @@
             background: #2d2d2d;
             padding: 10px;
             z-index: 100;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
         }
-
+        
         #canvas {
             margin-top: 60px;
             width: 100%;
@@ -31,7 +32,7 @@
             position: relative;
             overflow: auto;
         }
-
+        
         .node {
             position: absolute;
             background: #3d3d3d;
@@ -41,12 +42,12 @@
             padding: 10px;
             cursor: move;
         }
-
+        
         .node.root {
             background: #2d4f3c;
             border-color: #4CAF50;
         }
-
+        
         .node-header {
             padding: 5px;
             background: #444;
@@ -54,7 +55,7 @@
             margin: -10px -10px 10px -10px;
             border-bottom: 1px solid #555;
         }
-
+        
         .node-content {
             font-family: monospace;
             white-space: pre-wrap;
@@ -65,13 +66,13 @@
             background: #2a2a2a;
             border-radius: 4px;
         }
-
+        
         .node-controls {
             display: flex;
             gap: 5px;
             margin-top: 10px;
         }
-
+        
         button {
             background: #4a4a4a;
             border: 1px solid #666;
@@ -80,11 +81,11 @@
             border-radius: 4px;
             cursor: pointer;
         }
-
+        
         button:hover {
             background: #555;
         }
-
+        
         .modal {
             display: none;
             position: fixed;
@@ -95,9 +96,9 @@
             padding: 20px;
             border-radius: 8px;
             z-index: 1000;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
         }
-
+        
         .modal-backdrop {
             display: none;
             position: fixed;
@@ -105,11 +106,12 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.5);
             z-index: 999;
         }
-
-        input, textarea {
+        
+        input,
+        textarea {
             background: #333;
             border: 1px solid #555;
             color: #fff;
@@ -118,7 +120,7 @@
             border-radius: 4px;
             width: 100%;
         }
-
+        
         .endpoint {
             width: 10px;
             height: 10px;
@@ -127,6 +129,7 @@
         }
     </style>
 </head>
+
 <body>
     <div id="toolbar">
         <button onclick="showNewLoomModal()">New Loom</button>
@@ -181,7 +184,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/jsplumb@2.15.6/dist/js/jsplumb.min.js"></script>
     <script>
-        const BASE_URL = document.getElementById("base-url").textContent;
+        const BASE_URL = 'http://localhost:8000';
 
         // Helper: do a JSON POST request
         async function postJSON(url, data) {
