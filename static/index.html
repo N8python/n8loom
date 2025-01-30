@@ -402,58 +402,49 @@
             }
         }
 
-        // 3) View a Loom (full subtree)
-        async function viewLoom() {
-            const loomId = document.getElementById("view-loom-id").value;
-            const respBox = document.getElementById("view-loom-response");
-            respBox.textContent = "Fetching loom subtree...";
+        // Load and visualize existing loom
+        async function loadLoom(loomId) {
             try {
                 const data = await getJSON(`${BASE_URL}/loom/${loomId}`);
-                respBox.textContent = JSON.stringify(data, null, 2);
-            } catch (err) {
-                respBox.textContent = err.message;
-            }
-        }
-
-        // 4) View a Node
-        async function viewNode() {
-            const nodeId = document.getElementById("view-node-id").value;
-            const respBox = document.getElementById("view-node-response");
-            respBox.textContent = "Fetching node info...";
-            try {
-                const data = await getJSON(`${BASE_URL}/node/${nodeId}`);
-                respBox.textContent = JSON.stringify(data, null, 2);
-            } catch (err) {
-                respBox.textContent = err.message;
-            }
-        }
-
-        // 5) Ramify a Node
-        async function ramifyNode() {
-            const nodeId = document.getElementById("ramify-node-id").value;
-            const ramifyText = document.getElementById("ramify-text").value;
-            const n = parseInt(document.getElementById("ramify-n").value, 10);
-            const temp = parseFloat(document.getElementById("ramify-temp").value);
-            const max_tokens = parseInt(document.getElementById("ramify-max-tokens").value, 10);
-            const respBox = document.getElementById("ramify-node-response");
-            respBox.textContent = "Ramifying node...";
-            try {
-                const body = {
-                    node_id: nodeId
-                };
-                if (ramifyText) {
-                    // If text is provided, use that
-                    body.text = ramifyText;
-                } else {
-                    // else use generation parameters
-                    body.n = n;
-                    body.temp = temp;
-                    body.max_tokens = max_tokens;
+                
+                // Clear existing nodes
+                document.getElementById('canvas').innerHTML = '';
+                nodes.clear();
+                jsPlumbInstance.reset();
+                
+                // Create nodes recursively
+                function createNodesFromSubtree(nodeData, x, y, isRoot = false) {
+                    const node = createNodeElement(
+                        nodeData.node_id,
+                        nodeData.text,
+                        x,
+                        y,
+                        isRoot
+                    );
+                    
+                    nodes.set(nodeData.node_id, {
+                        element: node,
+                        data: nodeData
+                    });
+                    
+                    if (nodeData.children && nodeData.children.length > 0) {
+                        const numChildren = nodeData.children.length;
+                        const totalWidth = (numChildren - 1) * 250;
+                        const startX = x - totalWidth/2;
+                        
+                        nodeData.children.forEach((child, i) => {
+                            const childX = startX + (i * 250);
+                            const childY = y + 120;
+                            createNodesFromSubtree(child, childX, childY);
+                            connectNodes(nodeData.node_id, child.node_id);
+                        });
+                    }
                 }
-                const data = await postJSON(`${BASE_URL}/node/ramify`, body);
-                respBox.textContent = JSON.stringify(data, null, 2);
+                
+                createNodesFromSubtree(data, window.innerWidth/2 - 100, 100, true);
+                
             } catch (err) {
-                respBox.textContent = err.message;
+                alert(`Error loading loom: ${err.message}`);
             }
         }
 
@@ -515,18 +506,11 @@
             }
         }
 
-        // 7) View Node Subtree
-        async function viewNodeSubtree() {
-            const nodeId = document.getElementById("view-subtree-node-id").value;
-            const respBox = document.getElementById("view-subtree-response");
-            respBox.textContent = "Fetching node subtree...";
-            try {
-                const data = await getJSON(`${BASE_URL}/node/${nodeId}/subtree`);
-                respBox.textContent = JSON.stringify(data, null, 2);
-            } catch (err) {
-                respBox.textContent = err.message;
-            }
-        }
+        // Load button in toolbar
+        document.getElementById('toolbar').innerHTML += `
+            <input type="text" id="loadLoomId" placeholder="Loom ID" style="width: 200px; margin: 0 10px;">
+            <button onclick="loadLoom(document.getElementById('loadLoomId').value)">Load Loom</button>
+        `;
     </script>
 </body>
 
