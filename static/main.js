@@ -40,6 +40,14 @@ function showStatus(message, isError = false) {
 // ------------------ Tree Rendering Logic ------------------
 
 // Recursively search for node + path from root to nodeId
+// Calculate the maximum depth below a node
+function getMaxDepth(node) {
+    if (!node.children || node.children.length === 0) {
+        return 0;
+    }
+    return 1 + Math.max(...node.children.map(child => getMaxDepth(child)));
+}
+
 function findNodeAndPath(root, targetId, path = []) {
     // If this is the node
     if (root.node_id === targetId) {
@@ -146,7 +154,8 @@ function renderRelativeView(selectedId) {
         selectedNodeData.children.forEach(child => {
             const childDiv = document.createElement('div');
             childDiv.className = 'child-node';
-            childDiv.textContent = child.text || 'Empty child';
+            const depth = getMaxDepth(child);
+            childDiv.textContent = (child.text || 'Empty child') + '⚫️'.repeat(depth);
 
             // Clicking a child sets it as selected
             childDiv.onclick = (e) => {
