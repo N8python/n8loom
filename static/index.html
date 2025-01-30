@@ -383,8 +383,11 @@
                 const data = await postJSON(`${BASE_URL}/node/ramify`, body);
 
                 // Remove existing child nodes first
+                // Get parent node data
                 const parentNode = nodes.get(nodeId);
-                if (!parentNode) throw new Error('Parent node not found');
+                if (!parentNode) {
+                    throw new Error(`Node ${nodeId} not found in nodes Map`);
+                }
 
                 // Find and remove all descendant nodes
                 const descendants = Array.from(document.querySelectorAll('.node'))
