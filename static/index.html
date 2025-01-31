@@ -65,7 +65,7 @@
             margin-bottom: 10px;
         }
         
-        button:hover {
+        button:not(.icon-btn):hover {
             background-color: #45a049;
         }
         /* Status message styling */
@@ -148,8 +148,7 @@
         }
         /* Delete button inside any node */
         
-        .delete-btn {
-            background: #ff4444;
+        .icon-btn {
             color: white;
             border: none;
             border-radius: 4px;
@@ -162,14 +161,18 @@
         
         .ramify-btn {
             background: blue;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 2px 6px;
-            cursor: pointer;
-            font-size: 12px;
-            margin-top: 5px;
-            display: inline-block;
+        }
+        
+        .delete-btn {
+            background: red
+        }
+        
+        .extend-btn {
+            background: green;
+        }
+        
+        .icon-btn:hover {
+            filter: brightness(0.9);
         }
         
         .selected-node {
@@ -177,10 +180,6 @@
             align-items: center;
             gap: 4px;
             /* Alternative to margin-left on buttons */
-        }
-        
-        .delete-btn:hover {
-            background: #cc0000;
         }
         
         .ancestor-chunk {
@@ -218,11 +217,6 @@
             <button onclick="createLoom()">Create New Loom</button>
 
             <div class="form-group">
-                <label for="ramifyText">Ramify Text (optional):</label>
-                <input type="text" id="ramifyText" placeholder="Enter text or leave empty for generation">
-            </div>
-
-            <div class="form-group">
                 <label for="numSamples">Number of Samples:</label>
                 <input type="number" id="numSamples" value="3" min="1" max="10">
             </div>
@@ -242,7 +236,7 @@
         </div>
 
         <div class="visualization">
-            <h2>Tree Visualization</h2>
+            <h2>Loom</h2>
             <div id="tree"></div>
         </div>
     </div>
