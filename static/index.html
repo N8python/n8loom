@@ -3,13 +3,18 @@
 
 <head>
     <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <title>Node Tree Visualizer</title>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: 'Space Mono', monospace;
             margin: 0;
             padding: 20px;
-            background-color: #f5f5f5;
+            background-color: #0a0a0f;
+            background-image: linear-gradient(45deg, rgba(33, 3, 44, 0.1) 25%, transparent 25%), linear-gradient(-45deg, rgba(33, 3, 44, 0.1) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(33, 3, 44, 0.1) 75%), linear-gradient(-45deg, transparent 75%, rgba(33, 3, 44, 0.1) 75%);
+            background-size: 20px 20px;
+            color: #00ff95;
+            text-shadow: 0 0 5px rgba(0, 255, 149, 0.5);
         }
         
         .container {
@@ -20,179 +25,198 @@
             gap: 20px;
         }
         
-        .control-panel {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        
+        .control-panel,
         .visualization {
-            background: white;
+            background: rgba(13, 14, 33, 0.85);
             padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            min-height: 600px;
+            border-radius: 2px;
+            box-shadow: 0 0 20px rgba(0, 255, 149, 0.2), inset 0 0 15px rgba(0, 255, 149, 0.1);
+            border: 1px solid rgba(0, 255, 149, 0.3);
+            backdrop-filter: blur(5px);
         }
         
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 20px;
+            position: relative;
         }
         
         label {
             display: block;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
             font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 0.8em;
+            color: #00ff95;
         }
         
         input,
         textarea {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
+            width: calc(100% - 20px);
+            padding: 10px;
+            background: rgba(10, 10, 15, 0.9);
+            border: 1px solid rgba(0, 255, 149, 0.3);
+            border-radius: 2px;
+            color: #00ff95;
+            font-family: 'Space Mono', monospace;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 0 10px rgba(0, 255, 149, 0.1);
+        }
+        
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #00ff95;
+            box-shadow: 0 0 15px rgba(0, 255, 149, 0.3), inset 0 0 10px rgba(0, 255, 149, 0.2);
         }
         
         button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 15px;
+            background: linear-gradient(45deg, #00ff95, #0066ff);
+            color: #000;
+            padding: 12px 20px;
             border: none;
-            border-radius: 4px;
+            border-radius: 2px;
             cursor: pointer;
             width: 100%;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: bold;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
         }
         
-        button:not(.icon-btn):hover {
-            background-color: #45a049;
-        }
-        /* Status message styling */
-        
-        .status {
-            padding: 10px;
-            margin-top: 10px;
-            border-radius: 4px;
-        }
-        
-        .status.success {
-            background-color: #dff0d8;
-            color: #3c763d;
+        button::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transform: rotate(45deg);
+            transition: all 0.3s ease;
         }
         
-        .status.error {
-            background-color: #f2dede;
-            color: #a94442;
+        button:hover::before {
+            left: 100%;
         }
-        /* Visualization layout */
         
-        #tree {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-        /* Chain of ancestors at the top */
-        
-        .parent-chain {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 255, 149, 0.4);
         }
         
         .chain-node {
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            background: #fff;
+            padding: 10px 15px;
+            border: 1px solid rgba(0, 255, 149, 0.3);
+            background: rgba(13, 14, 33, 0.9);
+            color: #00ff95;
             cursor: pointer;
-            transition: background-color 0.2s;
-            max-width: 200px;
-            overflow-wrap: anywhere;
-            white-space: pre;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
         
-        .chain-node:hover {
-            background-color: #f0f0f0;
+        .chain-node::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(0, 255, 149, 0.1), transparent);
+            transform: rotate(45deg);
+            transition: all 0.3s ease;
         }
         
-        .chain-arrow {
-            color: #888;
-        }
-        /* Children nodes grid */
-        
-        .children-container {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-top: 10px;
+        .chain-node:hover::after {
+            left: 100%;
         }
         
         .child-node {
+            border: 1px solid rgba(0, 255, 149, 0.3);
+            background: rgba(13, 14, 33, 0.9);
+            color: #00ff95;
+            padding: 15px;
+            transition: all 0.3s ease;
             width: fit-content;
             min-height: 60px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            background: #fff;
-            padding: 10px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            overflow-y: auto;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            overflow-y: auto;
         }
         
         .child-node:hover {
-            background-color: #f0f0f0;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 255, 149, 0.2);
         }
-        /* Delete button inside any node */
         
         .icon-btn {
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 2px 6px;
-            cursor: pointer;
-            font-size: 12px;
-            margin-top: 5px;
-            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 2px;
+            font-size: 0.8em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
         
         .ramify-btn {
-            background: blue;
+            background: linear-gradient(45deg, #0066ff, #6600ff);
         }
         
         .delete-btn {
-            background: red
+            background: linear-gradient(45deg, #ff0066, #ff6600);
         }
         
         .extend-btn {
-            background: green;
+            background: linear-gradient(45deg, #00ff95, #00ffff);
         }
         
-        .icon-btn:hover {
-            filter: brightness(0.9);
+        .status {
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 2px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.8em;
         }
         
-        .selected-node {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            /* Alternative to margin-left on buttons */
+        .status.success {
+            background: rgba(0, 255, 149, 0.1);
+            color: #00ff95;
+            border: 1px solid rgba(0, 255, 149, 0.3);
         }
         
-        .ancestor-chunk {
-            transition: 100ms;
-        }
-        
-        .ancestor-chunk:hover {
-            background-color: black;
-            color: white;
+        .status.error {
+            background: rgba(255, 0, 102, 0.1);
+            color: #ff0066;
+            border: 1px solid rgba(255, 0, 102, 0.3);
         }
         
         .selected-chunk {
-            border: 2px solid red;
+            border: 2px solid #ff0066;
+            box-shadow: 0 0 15px rgba(255, 0, 102, 0.4);
+        }
+        /* Add some cool scrollbar styling */
+        
+         ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+         ::-webkit-scrollbar-track {
+            background: rgba(13, 14, 33, 0.9);
+        }
+        
+         ::-webkit-scrollbar-thumb {
+            background: linear-gradient(45deg, #00ff95, #0066ff);
+            border-radius: 4px;
+        }
+        
+         ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(45deg, #0066ff, #00ff95);
         }
     </style>
 </head>
