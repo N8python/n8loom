@@ -141,12 +141,14 @@
             color: #00ff95;
             padding: 15px;
             transition: all 0.3s ease;
-            width: fit-content;
+            width: 100%;
+            max-width: 100%;
             min-height: 60px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            overflow-y: auto;
+            overflow: auto;
+            box-sizing: border-box;
         }
         
         .child-node:hover {
