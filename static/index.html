@@ -85,6 +85,17 @@
             position: relative;
             overflow: hidden;
             transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        pre {
+            margin: 0;
+            overflow-wrap: break-word;
+            white-space: pre-wrap;
+            flex: 1;
+            min-width: 0;
+            max-width: 100%;
+            overflow: hidden;
         }
         
         button::before {
