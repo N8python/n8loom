@@ -162,21 +162,28 @@ function renderRelativeView(selectedId) {
     extendBtn.onclick = (e) => {
         e.stopPropagation();
         
-        // Create input element
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'extend-input';
-        input.value = '';
+        // Create textarea element
+        const textarea = document.createElement('textarea');
+        textarea.className = 'extend-textarea';
+        textarea.value = '';
         
         // Insert after the last pre element in parentsDiv
         const lastPre = parentsDiv.querySelector('pre:last-of-type');
-        lastPre.after(input);
-        input.focus();
+        lastPre.after(textarea);
+        textarea.focus();
 
-        input.onkeydown = async(e) => {
+        // Auto-resize function
+        const adjustHeight = () => {
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
+        };
+
+        textarea.addEventListener('input', adjustHeight);
+
+        textarea.onkeydown = async(e) => {
             if (e.key === 'Enter' && e.shiftKey) {
                 e.preventDefault();
-                const text = input.value;
+                const text = textarea.value;
                 if (text) {
                     const { created_children } = await postJSON(`${BASE_URL}/node/ramify`, {
                         node_id: selectedNodeData.node_id,
@@ -188,9 +195,9 @@ function renderRelativeView(selectedId) {
                     const treeData = await getJSON(`${BASE_URL}/loom/${currentLoomId}`);
                     updateTree(treeData);
                 }
-                input.remove();
+                textarea.remove();
             } else if (e.key === 'Escape') {
-                input.remove();
+                textarea.remove();
             }
         };
     }

@@ -263,7 +263,7 @@
             background-color: darkblue;
         }
 
-        .extend-input {
+        .extend-textarea {
             font-family: 'Space Mono', monospace;
             background: transparent;
             border: none;
@@ -271,11 +271,13 @@
             font-size: inherit;
             padding: 0;
             margin: 0;
-            display: inline;
             width: 100%;
+            resize: vertical;
+            min-height: 1.2em;
+            overflow: hidden;
         }
         
-        .extend-input:focus {
+        .extend-textarea:focus {
             outline: none;
             box-shadow: none;
             border: none;
