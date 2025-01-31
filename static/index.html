@@ -135,6 +135,13 @@
             left: 100%;
         }
         
+        .children-container {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
         .child-node {
             border: 1px solid rgba(0, 255, 149, 0.3);
             background: rgba(13, 14, 33, 0.9);
@@ -147,8 +154,21 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            overflow: auto;
+            overflow: hidden;
             box-sizing: border-box;
+        }
+
+        .child-node pre {
+            margin: 0;
+            overflow-wrap: break-word;
+            white-space: pre-wrap;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .child-node button {
+            flex-shrink: 0;
+            margin: 0 0 0 10px;
         }
         
         .child-node:hover {
