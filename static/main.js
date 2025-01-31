@@ -118,7 +118,7 @@ function renderRelativeView(selectedId) {
             span.classList.add('ancestor-chunk');
         }
         if (branches > 1) {
-            span.style.backgroundColor = 'lightgrey';
+            span.style.backgroundColor = 'blue';
         }
         // Add a space after each node's text except maybe the last
         span.textContent = (node.display_text || 'Empty node');
@@ -151,7 +151,9 @@ function renderRelativeView(selectedId) {
         e.stopPropagation();
         await ramifySelected();
     }
-    buttonGroup.appendChild(ramifyBtn);
+    if (!selectedNodeData.terminal) {
+        buttonGroup.appendChild(ramifyBtn);
+    }
 
     const extendBtn = document.createElement('button');
     extendBtn.classList.add('extend-btn');
@@ -172,7 +174,9 @@ function renderRelativeView(selectedId) {
             updateTree(treeData);
         }
     }
-    buttonGroup.appendChild(extendBtn);
+    if (!selectedNodeData.terminal) {
+        buttonGroup.appendChild(extendBtn);
+    }
 
     // Create a delete button
     const deleteBtn = document.createElement('button');
@@ -187,7 +191,7 @@ function renderRelativeView(selectedId) {
     if (path.length > 1) {
         buttonGroup.appendChild(deleteBtn);
     }
-    
+
     selectedDiv.appendChild(buttonGroup);
 
     // 3) Children of this node
@@ -199,8 +203,8 @@ function renderRelativeView(selectedId) {
             const childDiv = document.createElement('div');
             childDiv.className = 'child-node';
             const depth = getMaxDepth(child);
-            childDiv.innerHTML = "<pre>" + (child.display_text || 'Empty child') + "</pre>" + 
-                               (depth > 0 ? `<span style="margin: 0 10px;">(...${depth} more levels)</span>` : '');
+            childDiv.innerHTML = "<pre>" + (child.display_text || 'Empty child') + "</pre>" +
+                (depth > 0 ? `<span style="margin: 0 10px;">(...${depth} more levels)</span>` : '');
 
             // Create a container for the buttons that will be inline
             const buttonContainer = document.createElement('div');
