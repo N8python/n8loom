@@ -159,20 +159,40 @@ function renderRelativeView(selectedId) {
     extendBtn.classList.add('extend-btn');
     extendBtn.classList.add('icon-btn');
     extendBtn.textContent = '📝';
-    extendBtn.onclick = async(e) => {
+    extendBtn.onclick = (e) => {
         e.stopPropagation();
-        const text = prompt('Enter new text for this node:');
-        if (text) {
-            const { created_children } = await postJSON(`${BASE_URL}/node/ramify`, {
-                node_id: selectedNodeData.node_id,
-                text: text
-            });
-            selectedNode = created_children[0];
+        
+        // Create input element
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'extend-input';
+        input.value = '';
+        
+        // Insert after the last pre element in parentsDiv
+        const lastPre = parentsDiv.querySelector('pre:last-of-type');
+        lastPre.after(input);
+        input.focus();
 
-            // Refresh the tree
-            const treeData = await getJSON(`${BASE_URL}/loom/${currentLoomId}`);
-            updateTree(treeData);
-        }
+        input.onkeydown = async(e) => {
+            if (e.key === 'Enter' && e.shiftKey) {
+                e.preventDefault();
+                const text = input.value;
+                if (text) {
+                    const { created_children } = await postJSON(`${BASE_URL}/node/ramify`, {
+                        node_id: selectedNodeData.node_id,
+                        text: text
+                    });
+                    selectedNode = created_children[0];
+
+                    // Refresh the tree
+                    const treeData = await getJSON(`${BASE_URL}/loom/${currentLoomId}`);
+                    updateTree(treeData);
+                }
+                input.remove();
+            } else if (e.key === 'Escape') {
+                input.remove();
+            }
+        };
     }
     if (!selectedNodeData.terminal) {
         buttonGroup.appendChild(extendBtn);
