@@ -48,6 +48,19 @@ function getMaxDepth(node) {
     return 1 + Math.max(...node.children.map(child => getMaxDepth(child)));
 }
 
+function countNonzeroDepths(node) {
+    if (!node.children || node.children.length === 0) {
+        return 0;
+    }
+    let nonZeroDepths = 0;
+    for (let child of node.children) {
+        if (getMaxDepth(child) > 0) {
+            nonZeroDepths++;
+        }
+    }
+    return nonZeroDepths;
+}
+
 function findNodeAndPath(root, targetId, path = []) {
     // If this is the node
     if (root.node_id === targetId) {
@@ -97,14 +110,18 @@ function renderRelativeView(selectedId) {
     //    - highlights on hover
     //    - on click, re-selects that ancestor
     path.forEach((node, index) => {
-        const span = document.createElement('span');
+        const branches = countNonzeroDepths(node);
+        const span = document.createElement('pre');
         if (index === path.length - 1) {
             span.classList.add('selected-chunk');
         } else {
             span.classList.add('ancestor-chunk');
         }
+        if (branches > 1) {
+            span.style.backgroundColor = 'lightgrey';
+        }
         // Add a space after each node's text except maybe the last
-        span.textContent = (node.text || 'Empty node') + ' ';
+        span.textContent = (node.display_text || 'Empty node');
 
         // Clicking on this chunk re-selects that node
         span.onclick = (e) => {
@@ -124,9 +141,42 @@ function renderRelativeView(selectedId) {
     selectedDiv.className = 'selected-node';
 
 
+
+    const ramifyBtn = document.createElement('button');
+    ramifyBtn.classList.add('ramify-btn');
+    ramifyBtn.classList.add('icon-btn');
+    ramifyBtn.textContent = '🌱';
+    ramifyBtn.onclick = async(e) => {
+        e.stopPropagation();
+        await ramifySelected();
+    }
+    selectedDiv.appendChild(ramifyBtn);
+
+    const extendBtn = document.createElement('button');
+    extendBtn.classList.add('extend-btn');
+    extendBtn.classList.add('icon-btn');
+    extendBtn.textContent = '📝';
+    extendBtn.onclick = async(e) => {
+        e.stopPropagation();
+        const text = prompt('Enter new text for this node:');
+        if (text) {
+            const { created_children } = await postJSON(`${BASE_URL}/node/ramify`, {
+                node_id: selectedNodeData.node_id,
+                text: text
+            });
+            selectedNode = created_children[0];
+
+            // Refresh the tree
+            const treeData = await getJSON(`${BASE_URL}/loom/${currentLoomId}`);
+            updateTree(treeData);
+        }
+    }
+    selectedDiv.appendChild(extendBtn);
+
     // Create a delete button
     const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'delete-btn';
+    deleteBtn.classList.add('delete-btn');
+    deleteBtn.classList.add('icon-btn');
     deleteBtn.textContent = '🗑️';
     deleteBtn.onclick = async(e) => {
         e.stopPropagation();
@@ -137,15 +187,6 @@ function renderRelativeView(selectedId) {
         selectedDiv.appendChild(deleteBtn);
     }
 
-    const ramifyBtn = document.createElement('button');
-    ramifyBtn.className = 'ramify-btn';
-    ramifyBtn.textContent = '🌱';
-    ramifyBtn.onclick = async(e) => {
-        e.stopPropagation();
-        await ramifySelected();
-    }
-    selectedDiv.appendChild(ramifyBtn);
-
     // 3) Children of this node
     const childrenDiv = document.createElement('div');
     childrenDiv.className = 'children-container';
@@ -155,7 +196,7 @@ function renderRelativeView(selectedId) {
             const childDiv = document.createElement('div');
             childDiv.className = 'child-node';
             const depth = getMaxDepth(child);
-            childDiv.textContent = (child.text || 'Empty child') + (depth > 0 ? ` (...${depth} more levels)` : '');
+            childDiv.innerHTML = "<pre>" + (child.display_text || 'Empty child') + "</pre>" + (depth > 0 ? `<strong>(...${depth} more levels)</strong>` : '');
 
             // Clicking a child sets it as selected
             childDiv.onclick = (e) => {
@@ -165,7 +206,8 @@ function renderRelativeView(selectedId) {
 
             // Add a delete button for this child
             const childDeleteBtn = document.createElement('button');
-            childDeleteBtn.className = 'delete-btn';
+            childDeleteBtn.classList.add('delete-btn');
+            childDeleteBtn.classList.add('icon-btn');
             childDeleteBtn.textContent = '🗑️';
             childDeleteBtn.style.width = 'fit-content';
             childDeleteBtn.onclick = async(e) => {
@@ -276,18 +318,11 @@ async function ramifySelected() {
     }
 
     try {
-        const ramifyText = document.getElementById('ramifyText').value;
         const body = { node_id: selectedNode };
-
-        if (ramifyText) {
-            // If user provided custom text
-            body.text = ramifyText;
-        } else {
-            // Otherwise generate new text from the model
-            body.n = parseInt(document.getElementById('numSamples').value, 10);
-            body.temp = parseFloat(document.getElementById('temperature').value);
-            body.max_tokens = parseInt(document.getElementById('maxTokens').value, 10);
-        }
+        // Otherwise generate new text from the model
+        body.n = parseInt(document.getElementById('numSamples').value, 10);
+        body.temp = parseFloat(document.getElementById('temperature').value);
+        body.max_tokens = parseInt(document.getElementById('maxTokens').value, 10);
 
         await postJSON(`${BASE_URL}/node/ramify`, body);
 
