@@ -155,7 +155,7 @@ function renderRelativeView(selectedId) {
             const childDiv = document.createElement('div');
             childDiv.className = 'child-node';
             const depth = getMaxDepth(child);
-            childDiv.textContent = (child.text || 'Empty child') + '⚫️'.repeat(depth);
+            childDiv.textContent = (child.text || 'Empty child') + (depth > 0 ? ` (...${depth} more levels)` : '');
 
             // Clicking a child sets it as selected
             childDiv.onclick = (e) => {
@@ -300,12 +300,3 @@ async function ramifySelected() {
         showStatus(error.message, true);
     }
 }
-
-// On DOM load
-document.addEventListener('DOMContentLoaded', () => {
-    // Disable the ramify button unless we have a selected node
-    document.getElementById('ramifyBtn').disabled = true;
-    setInterval(() => {
-        document.getElementById('ramifyBtn').disabled = !selectedNode;
-    }, 200);
-});
