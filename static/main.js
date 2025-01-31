@@ -140,7 +140,8 @@ function renderRelativeView(selectedId) {
     const selectedDiv = document.createElement('div');
     selectedDiv.className = 'selected-node';
 
-
+    const buttonGroup = document.createElement('div');
+    buttonGroup.className = 'button-group';
 
     const ramifyBtn = document.createElement('button');
     ramifyBtn.classList.add('ramify-btn');
@@ -150,7 +151,7 @@ function renderRelativeView(selectedId) {
         e.stopPropagation();
         await ramifySelected();
     }
-    selectedDiv.appendChild(ramifyBtn);
+    buttonGroup.appendChild(ramifyBtn);
 
     const extendBtn = document.createElement('button');
     extendBtn.classList.add('extend-btn');
@@ -171,7 +172,7 @@ function renderRelativeView(selectedId) {
             updateTree(treeData);
         }
     }
-    selectedDiv.appendChild(extendBtn);
+    buttonGroup.appendChild(extendBtn);
 
     // Create a delete button
     const deleteBtn = document.createElement('button');
@@ -184,8 +185,10 @@ function renderRelativeView(selectedId) {
         await deleteNode(selectedNodeData.node_id);
     };
     if (path.length > 1) {
-        selectedDiv.appendChild(deleteBtn);
+        buttonGroup.appendChild(deleteBtn);
     }
+    
+    selectedDiv.appendChild(buttonGroup);
 
     // 3) Children of this node
     const childrenDiv = document.createElement('div');
