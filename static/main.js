@@ -199,7 +199,15 @@ function renderRelativeView(selectedId) {
             const childDiv = document.createElement('div');
             childDiv.className = 'child-node';
             const depth = getMaxDepth(child);
-            childDiv.innerHTML = "<pre>" + (child.display_text || 'Empty child') + "</pre>" + (depth > 0 ? `<strong>(...${depth} more levels)</strong>` : '');
+            childDiv.innerHTML = "<pre>" + (child.display_text || 'Empty child') + "</pre>" + 
+                               (depth > 0 ? `<span style="margin: 0 10px;">(...${depth} more levels)</span>` : '');
+
+            // Create a container for the buttons that will be inline
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.display = 'inline-flex';
+            buttonContainer.style.alignItems = 'center';
+            buttonContainer.style.marginLeft = '10px';
+            childDiv.appendChild(buttonContainer);
 
             // Clicking a child sets it as selected
             childDiv.onclick = (e) => {
@@ -218,7 +226,7 @@ function renderRelativeView(selectedId) {
                 await deleteNode(child.node_id);
             };
 
-            childDiv.appendChild(childDeleteBtn);
+            buttonContainer.appendChild(childDeleteBtn);
 
             childrenDiv.appendChild(childDiv);
         });
