@@ -257,3 +257,75 @@ def generate_batched(
             print(f"Peak memory: {peak_mem:.3f} GB")
     mx.metal.clear_cache()
     return decoded_texts, prompt_cache, total_prompt_len, [len(x) for x in tokens_so_far], ended
+
+    def generate_batched_stream(
+        model: nn.Module,
+        tokenizer: Union[PreTrainedTokenizer, TokenizerWrapper],
+        prompt: List[int],
+        batch_size: int,
+        *,
+        prompt_cache: Optional[List[cache.KVCache]] = None,
+        verbose: bool = False,
+        max_tokens: int = 256,
+        temp: float = 0.0,
+        top_p: float = 0.0,
+        min_p: float = 0.0,
+        min_tokens_to_keep: int = 1,
+        repetition_penalty: float = 1.0,
+        repetition_context_size: int = 20,
+        prefill_step_size: int = 512,
+        **kwargs,
+    ):
+        """
+        Generate responses in a streaming fashion.
+        Yields intermediate decoded texts at each generation step.
+        Each yield returns a dict with keys "type" ("update" or "final") and "decoded_texts".
+        """
+        from typing import List, Optional, Union
+        from transformers import PreTrainedTokenizer
+        from mlx_lm.tokenizer_utils import TokenizerWrapper
+        import mlx.core as mx
+        if not isinstance(tokenizer, TokenizerWrapper):
+            tokenizer = TokenizerWrapper(tokenizer)
+        prompt_ids = mx.array(prompt)
+        if prompt_cache is None:
+            from mlx_lm import cache as lm_cache
+            prompt_cache = lm_cache.make_prompt_cache(model)
+        total_prompt_len = prompt_ids.shape[0]
+        processed = 0
+        while processed < total_prompt_len:
+            chunk_end = min(processed + prefill_step_size, total_prompt_len)
+            inputs_chunk = prompt_ids[processed:chunk_end]
+            _ = model(inputs_chunk[None], cache=prompt_cache)
+            processed = chunk_end
+        const_batch = batch_size
+        y = mx.repeat(prompt_ids[-1:][None, :], repeats=const_batch, axis=0)
+        for c in prompt_cache:
+            c.keys = mx.repeat(c.keys, repeats=const_batch, axis=0)
+            c.values = mx.repeat(c.values, repeats=const_batch, axis=0)
+        tokens_so_far = [[] for _ in range(const_batch)]
+        n = 0
+        while n < max_tokens:
+            with mx.new_stream(mx.default_device()):
+                logits = model(y, cache=prompt_cache)
+                logits = logits[:, -1, :]
+                mx.async_eval(logits)
+            from mlx_lm.sample_utils import make_sampler
+            sampler = make_sampler(temp, top_p, min_p, min_tokens_to_keep)
+            sampled = sampler(logits).tolist()
+            sampled_tokens = []
+            ended = [False] * const_batch
+            for i in range(const_batch):
+                token = sampled[i]
+                if token in tokenizer.eos_token_ids:
+                    ended[i] = True
+                else:
+                    tokens_so_far[i].append(token)
+                sampled_tokens.append(token)
+            y = mx.array(sampled_tokens).reshape(const_batch, 1)
+            n += 1
+            decoded_texts = [tokenizer.decode(seq) for seq in tokens_so_far]
+            yield {"type": "update", "decoded_texts": decoded_texts}
+            if all(ended):
+                break
+        yield {"type": "final", "decoded_texts": [tokenizer.decode(seq) for seq in tokens_so_far]}

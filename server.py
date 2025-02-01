@@ -59,6 +59,7 @@ class RamifyRequest(BaseModel):
     n: Optional[int] = 4
     temp: Optional[float] = 0.8
     max_tokens: Optional[int] = 8
+    stream: Optional[bool] = False
 
 class RamifyResponse(BaseModel):
     node_id: str
@@ -229,18 +230,25 @@ def get_node_info(node_id: str):
     return serialize_heddle(node, node_id)
 
 
-@app.post("/node/ramify", response_model=RamifyResponse)
+@app.post("/node/ramify")
 def ramify_node(req: RamifyRequest):
     """
     - If `text` is given as a string, create one text child.
     - If `text` is given as a list of strings, create multiple text children.
     - Otherwise, create children by sampling from the model (n, temp, max_tokens).
+      If `stream` is True, stream generation updates.
     """
     if req.node_id not in heddle_store:
         raise HTTPException(status_code=404, detail="Node not found")
-
     node = heddle_store[req.node_id]
-    result = node.ramify(req.text, n=req.n, temp=req.temp, max_tokens=req.max_tokens)
+    result = node.ramify(req.text, n=req.n, temp=req.temp, max_tokens=req.max_tokens, stream=req.stream)
+    if req.stream:
+        import json
+        from fastapi.responses import StreamingResponse
+        def event_generator():
+            for update in result:
+                yield json.dumps(update) + "\n"
+        return StreamingResponse(event_generator(), media_type="application/json")
 
     created_children_ids = []
 

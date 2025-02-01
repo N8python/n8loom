@@ -8,7 +8,7 @@ import mlx.nn as nn
 from mlx.utils import tree_flatten, tree_map, tree_unflatten
 from mlx_lm.models.cache import KVCache
 from mlx_lm import load, generate
-from utils import generate_batched, prompt_to_cache
+from utils import generate_batched, generate_batched_stream, prompt_to_cache
 import numpy as np
 import copy
 from collections import namedtuple
@@ -108,7 +108,21 @@ class Heddle:
 			children = [self.add_text_child(text) for text in arg]
 			return children
 		else:
-			return self.make_children(**kwargs)
+			if kwargs.get('stream', False):
+				from utils import generate_batched_stream
+				c = self.get_prefix_cache()
+				return generate_batched_stream(
+					self.model,
+					self.tokenizer,
+					self.tokens,
+					batch_size=kwargs.get('n', 4),
+					prompt_cache=c,
+					verbose=False,
+					temp=kwargs.get('temp', 0.8),
+					max_tokens=kwargs.get('max_tokens', 8)
+				)
+			else:
+				return self.make_children(**kwargs)
 	def get_prefix_text(self, exclude: int = 0) -> str:
 		parents = [self]
 		parent = self.parent

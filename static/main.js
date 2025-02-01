@@ -359,21 +359,44 @@ async function ramifySelected() {
         showStatus('Please select a node first', true);
         return;
     }
-
     try {
-        const body = { node_id: selectedNode };
-        // Otherwise generate new text from the model
-        body.n = parseInt(document.getElementById('numSamples').value, 10);
-        body.temp = parseFloat(document.getElementById('temperature').value);
-        body.max_tokens = parseInt(document.getElementById('maxTokens').value, 10);
-
-        await postJSON(`${BASE_URL}/node/ramify`, body);
-
-        // Refresh the tree
+        const body = {
+            node_id: selectedNode,
+            stream: true,
+            n: parseInt(document.getElementById('numSamples').value, 10),
+            temp: parseFloat(document.getElementById('temperature').value),
+            max_tokens: parseInt(document.getElementById('maxTokens').value, 10)
+        };
+        const response = await fetch(`${BASE_URL}/node/ramify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Error ${response.status}: ${errorText}`);
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let resultText = "";
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            resultText += decoder.decode(value, { stream: true });
+            const lines = resultText.split("\n");
+            for (let i = 0; i < lines.length - 1; i++) {
+                const line = lines[i].trim();
+                if (line) {
+                    const data = JSON.parse(line);
+                    console.log('Stream update:', data);
+                    // Update the UI with data.decoded_texts as needed
+                }
+            }
+            resultText = lines[lines.length - 1];
+        }
         const treeData = await getJSON(`${BASE_URL}/loom/${currentLoomId}`);
         updateTree(treeData);
-
-        showStatus('Node ramified successfully');
+        showStatus('Node ramified successfully (stream)');
     } catch (error) {
         showStatus(error.message, true);
     }
