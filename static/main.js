@@ -161,12 +161,12 @@ function renderRelativeView(selectedId) {
     extendBtn.textContent = '📝';
     extendBtn.onclick = (e) => {
         e.stopPropagation();
-        
+
         // Create textarea element
         const textarea = document.createElement('textarea');
         textarea.className = 'extend-textarea';
         textarea.value = '';
-        
+
         // Insert after the last pre element in parentsDiv
         const lastPre = parentsDiv.querySelector('pre:last-of-type');
         lastPre.after(textarea);
@@ -318,7 +318,7 @@ async function createLoom() {
             model_id: currentModelId,
             prompt: prompt
         });
-
+        selectedNode = null;
         currentLoomId = response.loom_id;
 
         // Fetch and display the initial tree
@@ -329,6 +329,7 @@ async function createLoom() {
     } catch (error) {
         showStatus(error.message, true);
     }
+    refreshLoomList();
 }
 
 async function deleteNode(nodeId) {
@@ -377,3 +378,180 @@ async function ramifySelected() {
         showStatus(error.message, true);
     }
 }
+
+
+// ------------------ New Functions for Loom Management ------------------
+async function refreshLoomList() {
+    try {
+        const looms = await getJSON(`${BASE_URL}/looms`);
+        const loomListDiv = document.getElementById('loomList');
+        loomListDiv.innerHTML = '';
+        looms.forEach(loom => {
+            const loomDiv = document.createElement('div');
+            loomDiv.style.marginBottom = '10px';
+
+            // Create a span to display only the loom id.
+            const loomIdSpan = document.createElement('span');
+            loomIdSpan.textContent = loom.loom_id;
+            loomIdSpan.style.cursor = 'pointer';
+            loomIdSpan.style.marginRight = '10px';
+            // Single click loads the loom.
+            loomIdSpan.onclick = () => {
+                loadLoomById(loom.loom_id);
+            };
+            // Double-click to edit (inline renaming)
+            loomIdSpan.ondblclick = () => {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = loom.loom_id;
+                input.style.width = '100px';
+                input.onblur = async() => {
+                    if (input.value && input.value !== loom.loom_id) {
+                        try {
+                            await postJSON(`${BASE_URL}/looms/${loom.loom_id}/rename`, { new_id: input.value });
+                            showStatus(`Loom renamed to ${input.value}`);
+                            refreshLoomList();
+                        } catch (error) {
+                            showStatus(error.message, true);
+                        }
+                    }
+                    loomIdSpan.textContent = input.value;
+                    loomDiv.replaceChild(loomIdSpan, input);
+                };
+                input.onkeydown = (e) => {
+                    if (e.key === 'Enter') {
+                        input.blur();
+                    }
+                };
+                loomDiv.replaceChild(input, loomIdSpan);
+                input.focus();
+            };
+            loomDiv.appendChild(loomIdSpan);
+
+            // Create a small export button rendered as an up arrow.
+            const exportBtn = document.createElement('button');
+            exportBtn.className = 'icon-btn';
+            exportBtn.style.padding = '5px 8px';
+            exportBtn.textContent = '↑';
+            exportBtn.onclick = () => exportLoom(loom.loom_id);
+            loomDiv.appendChild(exportBtn);
+
+            // NEW: Create a delete button rendered as a trash icon.
+            // NEW: Create a delete button rendered as a trash icon.
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'icon-btn';
+            deleteBtn.style.padding = '5px 8px';
+            deleteBtn.style.marginLeft = '5px';
+            deleteBtn.textContent = '🗑️';
+            deleteBtn.onclick = async() => {
+                // Use SweetAlert instead of confirm()
+                swal({
+                    title: "Are you sure?",
+                    text: `Are you sure you want to delete loom ${loom.loom_id}?`,
+                    icon: "warning",
+                    buttons: true,
+                    dangerMode: true,
+                }).then(async(willDelete) => {
+                    if (willDelete) {
+                        try {
+                            await fetch(`${BASE_URL}/looms/${loom.loom_id}`, { method: 'DELETE' });
+                            showStatus(`Loom ${loom.loom_id} deleted successfully`);
+                            refreshLoomList();
+                        } catch (error) {
+                            showStatus(error.message, true);
+                        }
+                    }
+                });
+            };
+            loomDiv.appendChild(deleteBtn);
+
+
+            loomListDiv.appendChild(loomDiv);
+        });
+    } catch (error) {
+        showStatus(error.message, true);
+    }
+}
+
+
+function findDeepestNode(node, depth = 0) {
+    let maxDepth = depth;
+    let deepestNode = node;
+
+    if (node.children && node.children.length > 0) {
+        for (const child of node.children) {
+            const [childNode, childDepth] = findDeepestNode(child, depth + 1);
+            if (childDepth > maxDepth) {
+                maxDepth = childDepth;
+                deepestNode = childNode;
+            }
+        }
+    }
+
+    return [deepestNode, maxDepth];
+}
+
+async function loadLoomById(loomId) {
+    try {
+        const treeData = await getJSON(`${BASE_URL}/loom/${loomId}`);
+        currentLoomId = loomId;
+
+        // Find deepest node
+        const [deepestNode, _] = findDeepestNode(treeData);
+        selectedNode = deepestNode.node_id;
+
+        updateTree(treeData);
+        showStatus(`Loaded loom ${loomId}`);
+    } catch (error) {
+        showStatus(error.message, true);
+    }
+}
+
+function loadLoomFromInput() {
+    const loomId = document.getElementById('loadLoomId').value;
+    if (loomId) {
+        loadLoomById(loomId);
+    }
+}
+
+async function exportLoom(loomId) {
+    try {
+        const exportData = await getJSON(`${BASE_URL}/loom/${loomId}/export`);
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href", dataStr);
+        dlAnchorElem.setAttribute("download", `loom_${loomId}.json`);
+        dlAnchorElem.click();
+        showStatus(`Loom ${loomId} exported successfully`);
+    } catch (error) {
+        showStatus(error.message, true);
+    }
+}
+
+async function importLoomFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async(e) => {
+        try {
+            const loomData = JSON.parse(e.target.result);
+            if (!currentModelId) {
+                showStatus('Please load a model first before importing', true);
+                return;
+            }
+            const importResponse = await postJSON(`${BASE_URL}/looms/import`, {
+                model_id: currentModelId,
+                loom_data: loomData
+            });
+            showStatus(`Loom imported successfully: ${importResponse.loom_id}`);
+            // Optionally refresh the loom list
+            refreshLoomList();
+        } catch (error) {
+            showStatus(error.message, true);
+        }
+    };
+    reader.readAsText(file);
+    refreshLoomList();
+}
+
+refreshLoomList();

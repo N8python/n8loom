@@ -1,12 +1,13 @@
-
 from fastapi import FastAPI, Body, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Union
 import uvicorn
 from loom import Heddle, Loom
 from mlx_lm import load
+
 app = FastAPI()
 
 # For storing loaded models and created nodes.
@@ -45,6 +46,7 @@ class CreateLoomResponse(BaseModel):
 class NodeInfo(BaseModel):
     node_id: str
     text: str
+    display_text: str
     children_ids: List[str]
     terminal: bool
 
@@ -70,6 +72,20 @@ class TrimRequest(BaseModel):
     node_id: str
     token_trim: int
 
+# New models for the loom management endpoints
+class LoomInfo(BaseModel):
+    loom_id: str
+    root_heddle_id: str
+    prompt: str
+
+class ImportLoomRequest(BaseModel):
+    model_id: str
+    loom_data: Dict
+
+class ImportLoomResponse(BaseModel):
+    loom_id: str
+    heddle_id: str
+
 # ------------------------------
 # Helper functions
 # ------------------------------
@@ -78,6 +94,7 @@ def serialize_heddle(node: Heddle, node_id: str) -> NodeInfo:
     return NodeInfo(
         node_id=node_id,
         text=node.text,
+        display_text=node.display_text(),
         children_ids=[
             _id for _id, h in heddle_store.items() if h.parent is node
         ],
@@ -89,6 +106,7 @@ def build_subtree_dict(node: Heddle, node_id: str) -> Dict:
     return {
         "node_id": node_id,
         "text": node.text,
+        "display_text": node.display_text(),
         "terminal": node.terminal,
         "children": [
             build_subtree_dict(child, _id)
@@ -162,6 +180,42 @@ def get_loom_info(loom_id: str):
 
     return build_subtree_dict(loom_root, root_heddle_id)
 
+# Add this new model near the others:
+class RenameLoomRequest(BaseModel):
+    new_id: str
+
+# New endpoint to rename a loom.
+@app.post("/looms/{loom_id}/rename")
+def rename_loom(loom_id: str, req: RenameLoomRequest):
+    """
+    Rename an existing loom to a new id.
+    The new id must not already exist.
+    """
+    if loom_id not in loom_store:
+        raise HTTPException(status_code=404, detail="Loom not found")
+    if req.new_id in loom_store:
+        raise HTTPException(status_code=400, detail="New loom id already exists")
+    # Remove the old entry and reassign the loom under the new id.
+    loom = loom_store.pop(loom_id)
+    loom_store[req.new_id] = loom
+    return {"old_loom_id": loom_id, "new_loom_id": req.new_id}
+@app.delete("/looms/{loom_id}")
+def delete_loom(loom_id: str):
+    """
+    Delete a loom from the store, and remove its root node from the heddle store.
+    """
+    if loom_id not in loom_store:
+        raise HTTPException(status_code=404, detail="Loom not found")
+    # Remove the loom
+    loom = loom_store.pop(loom_id)
+    # Also remove its corresponding root node from heddle_store.
+    root_heddle_id = None
+    for hid, node in list(heddle_store.items()):
+        if node is loom:
+            root_heddle_id = hid
+            del heddle_store[hid]
+            break
+    return {"deleted_loom_id": loom_id, "deleted_root_heddle_id": root_heddle_id}
 
 @app.get("/node/{node_id}", response_model=NodeInfo)
 def get_node_info(node_id: str):
@@ -231,6 +285,7 @@ def trim_node(req: TrimRequest):
     node.trim(req.token_trim)
     return {"node_id": req.node_id, "trimmed_tokens": req.token_trim}
 
+
 @app.delete("/node/{node_id}")
 def delete_node(node_id: str):
     """
@@ -276,6 +331,87 @@ def get_subtree(node_id: str):
     node = heddle_store[node_id]
     return build_subtree_dict(node, node_id)
 
+
+# ------------------------------
+# New endpoints for loom management
+# ------------------------------
+
+@app.get("/looms", response_model=List[LoomInfo])
+def list_looms():
+    """
+    Returns a list of all looms currently in memory.
+    """
+    looms = []
+    for loom_id, loom in loom_store.items():
+        root_heddle_id = None
+        for hid, node in heddle_store.items():
+            if node is loom:
+                root_heddle_id = hid
+                break
+        if root_heddle_id:
+            looms.append(LoomInfo(loom_id=loom_id, root_heddle_id=root_heddle_id, prompt=loom.text))
+    return looms
+
+@app.get("/loom/{loom_id}/export")
+def export_loom(loom_id: str):
+    """
+    Export a given loom (its full tree) as JSON.
+    """
+    if loom_id not in loom_store:
+        raise HTTPException(status_code=404, detail="Loom not found")
+    loom_root = loom_store[loom_id]
+    root_heddle_id = None
+    for hid, node in heddle_store.items():
+        if node is loom_root:
+            root_heddle_id = hid
+            break
+    if root_heddle_id is None:
+        raise HTTPException(status_code=500, detail="Root node not found in heddle store.")
+    exported_tree = build_subtree_dict(loom_root, root_heddle_id)
+    return JSONResponse(content=exported_tree)
+
+@app.post("/looms/import", response_model=ImportLoomResponse)
+def import_loom(req: ImportLoomRequest):
+    """
+    Import a loom from an exported JSON structure.
+    The client must provide the model_id (which must already be loaded)
+    and the loom_data (the exported JSON). The loom will be re-instantiated
+    using the provided model/tokenizer and the tree structure rebuilt.
+    """
+    if req.model_id not in model_store:
+        raise HTTPException(status_code=400, detail="Model id not found")
+    model_data = model_store[req.model_id]
+    model = model_data["model"]
+    tokenizer = model_data["tokenizer"]
+
+    loom_json = req.loom_data
+    prompt = loom_json.get("text", "Imported Loom")
+    new_loom = Loom(model, tokenizer, prompt)
+    new_loom_id = get_next_id("loom_id")
+    loom_store[new_loom_id] = new_loom
+    new_heddle_id = get_next_id("heddle_id")
+    heddle_store[new_heddle_id] = new_loom
+
+    def import_subtree(parent, children_list):
+        for child in children_list:
+            child_text = child.get("text", "")
+            # Use the parent's ramify method to add a child with the provided text.
+            result = parent.ramify(child_text)
+            if result is None:
+                continue
+            # If multiple children are returned, we take the first.
+            if isinstance(result, list):
+                result = result[0]
+            child_id = get_next_id("heddle_id")
+            heddle_store[child_id] = result
+            if child.get("children"):
+                import_subtree(result, child["children"])
+    import_subtree(new_loom, loom_json.get("children", []))
+    return ImportLoomResponse(loom_id=new_loom_id, heddle_id=new_heddle_id)
+
+# ------------------------------
+# CORS, static files, and root endpoint
+# ------------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allows all origins
@@ -301,6 +437,7 @@ def read_root():
         """,
         media_type="text/html",
     )
+
 # ------------------------------
 # Run the server (for local testing)
 # ------------------------------
