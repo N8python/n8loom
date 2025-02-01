@@ -376,6 +376,12 @@ async function ramifySelected() {
             const errorText = await response.text();
             throw new Error(`Error ${response.status}: ${errorText}`);
         }
+        const childrenDiv = document.querySelector('.children-container');
+        const streamChild = document.createElement('div');
+        streamChild.className = 'child-node streaming';
+        streamChild.style.pointerEvents = 'none';
+        streamChild.innerHTML = "<pre>Generating...</pre>";
+        childrenDiv.appendChild(streamChild);
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let resultText = "";
@@ -388,8 +394,16 @@ async function ramifySelected() {
                 const line = lines[i].trim();
                 if (line) {
                     const data = JSON.parse(line);
-                    console.log('Stream update:', data);
-                    // Update the UI with data.decoded_texts as needed
+                    if (data.type === "update") {
+                        streamChild.querySelector('pre').textContent = data.decoded_texts.join(" / ");
+                    } else if (data.type === "final") {
+                        streamChild.querySelector('pre').textContent = data.decoded_texts.join(" / ");
+                        streamChild.style.pointerEvents = 'auto';
+                        streamChild.classList.remove('streaming');
+                        streamChild.onclick = () => {
+                            selectNode(selectedNode);
+                        };
+                    }
                 }
             }
             resultText = lines[lines.length - 1];
