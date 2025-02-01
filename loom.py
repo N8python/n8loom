@@ -114,6 +114,7 @@ class Heddle:
 				return self.make_children(**kwargs)
 	def make_child_stream(self, n: int = 4, temp: float = 0.8, max_tokens: int = 8):
 		from utils import generate_batched_stream
+		from cache_utils import frag_batch_gen
 		c = self.get_prefix_cache()
 		stream = generate_batched_stream(
 			self.model,
@@ -128,9 +129,11 @@ class Heddle:
 		for update in stream:
 			if update.get("type") == "final":
 				final_texts = update.get("decoded_texts", [])
+				generated_lengths = [len(self.tokenizer.encode(text)) - len(self.tokens) for text in final_texts]
+				fragments = frag_batch_gen(c, c[0].offset, generated_lengths)
 				made_kids = []
-				for text in final_texts:
-					child = Heddle(self.model, self.tokenizer, text, None, [])
+				for i, text in enumerate(final_texts):
+					child = Heddle(self.model, self.tokenizer, text, fragments[i], [])
 					child.terminal = True
 					self.add_child(child)
 					made_kids.append(child)
