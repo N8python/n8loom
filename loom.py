@@ -109,20 +109,33 @@ class Heddle:
 			return children
 		else:
 			if kwargs.get('stream', False):
-				from utils import generate_batched_stream
-				c = self.get_prefix_cache()
-				return generate_batched_stream(
-					self.model,
-					self.tokenizer,
-					self.tokens,
-					batch_size=kwargs.get('n', 4),
-					prompt_cache=c,
-					verbose=False,
-					temp=kwargs.get('temp', 0.8),
-					max_tokens=kwargs.get('max_tokens', 8)
-				)
+				return self.make_child_stream(**kwargs)
 			else:
 				return self.make_children(**kwargs)
+	def make_child_stream(self, n: int = 4, temp: float = 0.8, max_tokens: int = 8):
+		from utils import generate_batched_stream
+		c = self.get_prefix_cache()
+		stream = generate_batched_stream(
+			self.model,
+			self.tokenizer,
+			self.tokens,
+			batch_size=n,
+			prompt_cache=c,
+			verbose=False,
+			temp=temp,
+			max_tokens=max_tokens
+		)
+		for update in stream:
+			if update.get("type") == "final":
+				final_texts = update.get("decoded_texts", [])
+				made_kids = []
+				for text in final_texts:
+					child = Heddle(self.model, self.tokenizer, text, None, [])
+					child.terminal = True
+					self.add_child(child)
+					made_kids.append(child)
+				update["children"] = made_kids
+			yield update
 	def get_prefix_text(self, exclude: int = 0) -> str:
 		parents = [self]
 		parent = self.parent
