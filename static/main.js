@@ -372,6 +372,7 @@ async function ramifySelected() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
+
         if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`Error ${response.status}: ${errorText}`);
