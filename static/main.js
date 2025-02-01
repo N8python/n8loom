@@ -603,3 +603,39 @@ async function importLoomFile(event) {
 }
 
 refreshLoomList();
+ 
+// Add 'copy parent texts' utility button in the top right of the visualization div.
+function copyParentTexts() {
+    const parentsDiv = document.querySelector('.parents-text');
+    if (!parentsDiv) {
+        showStatus('No parent texts to copy', true);
+        return;
+    }
+    const pres = parentsDiv.querySelectorAll('pre');
+    let combinedText = '';
+    pres.forEach(pre => {
+         combinedText += pre.textContent + '\n';
+    });
+    navigator.clipboard.writeText(combinedText)
+    .then(() => {
+         showStatus('Copied parent texts to clipboard');
+    })
+    .catch(err => {
+         showStatus('Failed to copy: ' + err, true);
+    });
+}
+
+window.addEventListener('load', () => {
+    const visualizationDiv = document.querySelector('.visualization');
+    if (visualizationDiv) {
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'icon-btn';
+        copyBtn.style.position = 'absolute';
+        copyBtn.style.top = '10px';
+        copyBtn.style.right = '10px';
+        copyBtn.textContent = '📄';
+        copyBtn.title = 'Copy parent texts';
+        copyBtn.onclick = copyParentTexts;
+        visualizationDiv.appendChild(copyBtn);
+    }
+});
