@@ -377,11 +377,17 @@ async function ramifySelected() {
             throw new Error(`Error ${response.status}: ${errorText}`);
         }
         const childrenDiv = document.querySelector('.children-container');
-        const streamChild = document.createElement('div');
-        streamChild.className = 'child-node streaming';
-        streamChild.style.pointerEvents = 'none';
-        streamChild.innerHTML = "<pre>Generating...</pre>";
-        childrenDiv.appendChild(streamChild);
+        // Create side-by-side streaming child nodes for each sample
+        const streamChildNodes = [];
+        const batchSize = parseInt(document.getElementById('numSamples').value, 10);
+        for (let i = 0; i < batchSize; i++) {
+            const streamChild = document.createElement('div');
+            streamChild.className = 'child-node streaming';
+            streamChild.style.pointerEvents = 'none';
+            streamChild.innerHTML = "<pre>Generating...</pre>";
+            childrenDiv.appendChild(streamChild);
+            streamChildNodes.push(streamChild);
+        }
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let resultText = "";
@@ -395,14 +401,18 @@ async function ramifySelected() {
                 if (line) {
                     const data = JSON.parse(line);
                     if (data.type === "update") {
-                        streamChild.querySelector('pre').textContent = data.decoded_texts.join(" / ");
+                        for (let i = 0; i < data.decoded_texts.length; i++) {
+                            streamChildNodes[i].querySelector('pre').textContent = data.decoded_texts[i];
+                        }
                     } else if (data.type === "final") {
-                        streamChild.querySelector('pre').textContent = data.decoded_texts.join(" / ");
-                        streamChild.style.pointerEvents = 'auto';
-                        streamChild.classList.remove('streaming');
-                        streamChild.onclick = () => {
-                            selectNode(selectedNode);
-                        };
+                        for (let i = 0; i < data.decoded_texts.length; i++) {
+                            streamChildNodes[i].querySelector('pre').textContent = data.decoded_texts[i];
+                            streamChildNodes[i].style.pointerEvents = 'auto';
+                            streamChildNodes[i].classList.remove('streaming');
+                            streamChildNodes[i].onclick = () => {
+                                selectNode(selectedNode);
+                            };
+                        }
                     }
                 }
             }
