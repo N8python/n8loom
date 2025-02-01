@@ -126,19 +126,23 @@ class Heddle:
 			temp=temp,
 			max_tokens=max_tokens
 		)
+		final_update = None
 		for update in stream:
 			if update.get("type") == "final":
-				final_texts = update.get("decoded_texts", [])
-				generated_lengths = [len(self.tokenizer.encode(text)) - len(self.tokens) for text in final_texts]
-				fragments = frag_batch_gen(c, c[0].offset, generated_lengths)
-				made_kids = []
-				for i, text in enumerate(final_texts):
-					child = Heddle(self.model, self.tokenizer, text, fragments[i], [])
-					child.terminal = True
-					self.add_child(child)
-					made_kids.append(child)
-				update["children"] = made_kids
-			yield update
+				final_update = update
+		if final_update is None:
+			return
+		final_texts = final_update.get("decoded_texts", [])
+		generated_lengths = [len(self.tokenizer.encode(text)) - len(self.tokens) for text in final_texts]
+		fragments = frag_batch_gen(c, c[0].offset, generated_lengths)
+		made_kids = []
+		for i, text in enumerate(final_texts):
+			child = Heddle(self.model, self.tokenizer, text, fragments[i], [])
+			child.terminal = True
+			self.add_child(child)
+			made_kids.append(child)
+		final_update["children"] = made_kids
+		return final_update
 	def get_prefix_text(self, exclude: int = 0) -> str:
 		parents = [self]
 		parent = self.parent
