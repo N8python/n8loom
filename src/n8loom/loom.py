@@ -8,11 +8,11 @@ import mlx.nn as nn
 from mlx.utils import tree_flatten, tree_map, tree_unflatten
 from mlx_lm.models.cache import KVCache
 from mlx_lm import load, generate
-from utils import generate_batched, generate_batched_stream, prompt_to_cache
+from .utils import generate_batched, generate_batched_stream, prompt_to_cache
 import numpy as np
 import copy
 from collections import namedtuple
-from cache_utils import KVFrag, frag_cache, frag_batch_gen, fuse_cache_frags, clip_frag
+from .cache_utils import KVFrag, frag_cache, frag_batch_gen, fuse_cache_frags, clip_frag
 
 class Heddle:
 	text: str
@@ -21,12 +21,12 @@ class Heddle:
 	children: List[Heddle]
 	parent: Optional[Heddle]
 	terminal: bool
-	def __init__(self, model: nn.Module, tokenizer: Union[PreTrainedTokenizer, TokenizerWrapper], text: str, frags: Optional[List[KVFrag]], children: Optional[List[Heddle]], parent: Optional[Heddle] = None):
+	def __init__(self, model: nn.Module, tokenizer: Union[PreTrainedTokenizer, TokenizerWrapper], text: str, frags: Optional[List[KVFrag]], children: Optional[List[Heddle]], parent: Optional[Heddle] = None, trim_toks=1):
 		self.model = model
 		self.tokenizer = tokenizer
 		self.text = text
 		self.parent = parent
-		self.tokens = tokenizer.encode(text)[1:]
+		self.tokens = tokenizer.encode(text)[trim_toks:]
 		if frags is None:
 			c = None
 			if self.parent is None:
@@ -87,11 +87,11 @@ class Heddle:
 		fused = fuse_cache_frags(cache)
 		mx.eval(fused)
 		return fused
-	def make_children(self, n: int = 4, temp: float = 0.8, max_tokens: int = 8):
+	def make_children(self, n: int = 4, temp: float = 0.8, max_tokens: int = 8, min_p: float =0.05, **kwargs):
 		if self.terminal:
 			return
 		c = self.get_prefix_cache()
-		decoded_texts, prompt_cache, total_prompt_len, generated_lengths, ended = generate_batched(self.model, self.tokenizer, prompt=self.tokens, batch_size=n, prompt_cache=c, verbose=False, temp=temp, max_tokens=max_tokens)
+		decoded_texts, prompt_cache, total_prompt_len, generated_lengths, ended = generate_batched(self.model, self.tokenizer, prompt=self.tokens, batch_size=n,min_p=min_p,prompt_cache=c, verbose=False, temp=temp, max_tokens=max_tokens)
 		fragments = frag_batch_gen(prompt_cache, total_prompt_len, generated_lengths)
 		made_kids = []
 		for i in range(len(fragments)):
@@ -100,6 +100,7 @@ class Heddle:
 				child.terminal = True
 			self.add_child(child)
 			made_kids.append(child)
+			mx.metal.clear_cache()
 		return made_kids
 	def ramify(self, arg=None, **kwargs):
 		if isinstance(arg, str):
@@ -112,9 +113,7 @@ class Heddle:
 				return self.make_child_stream(**kwargs)
 			else:
 				return self.make_children(**kwargs)
-	def make_child_stream(self, n: int = 4, temp: float = 0.8, max_tokens: int = 8):
-		from utils import generate_batched_stream
-		from cache_utils import frag_batch_gen
+	def make_child_stream(self, n: int = 4, temp: float = 0.8, max_tokens: int = 8, min_p: float =0.05, **kwargs):
 		c = self.get_prefix_cache()
 		stream = generate_batched_stream(
 			self.model,
@@ -124,25 +123,31 @@ class Heddle:
 			prompt_cache=c,
 			verbose=False,
 			temp=temp,
+			min_p=min_p,
 			max_tokens=max_tokens
 		)
-		final_update = None
+		made_kids = []
 		for update in stream:
 			if update.get("type") == "final":
-				final_update = update
-		if final_update is None:
-			return
-		final_texts = final_update.get("decoded_texts", [])
-		generated_lengths = [len(self.tokenizer.encode(text)) - len(self.tokens) for text in final_texts]
-		fragments = frag_batch_gen(c, c[0].offset, generated_lengths)
-		made_kids = []
-		for i, text in enumerate(final_texts):
-			child = Heddle(self.model, self.tokenizer, text, fragments[i], [])
-			child.terminal = True
-			self.add_child(child)
-			made_kids.append(child)
-		final_update["children"] = made_kids
-		return final_update
+				final_texts = update.get("decoded_texts", [])
+				generated_lengths = update.get("generated_lengths", [])
+				total_prompt_len = update.get("total_prompt_len", 0)
+				prompt_cache = update.get("prompt_cache", [])
+				update["prompt_cache"] = None
+				ended = update.get("ended", [])
+				fragments = frag_batch_gen(prompt_cache, total_prompt_len, generated_lengths)
+				made_kids = []
+				for i, text in enumerate(final_texts):
+					child = Heddle(self.model, self.tokenizer, text, fragments[i], [])
+					if ended[i]:
+						child.terminal = True
+					self.add_child(child)
+					made_kids.append(child)
+				update["children"] = made_kids
+				mx.metal.clear_cache()
+			yield update
+		return made_kids
+
 	def get_prefix_text(self, exclude: int = 0) -> str:
 		parents = [self]
 		parent = self.parent
@@ -217,31 +222,18 @@ class Heddle:
 class Loom(Heddle):
 	def __init__(self, model, tokenizer, prompt):
 		self.user_prompt = prompt
+		self.chat_template_used = False
 		messages = [{"role": "user", "content": prompt}]
-		prompt = tokenizer.apply_chat_template(
-			messages, add_generation_prompt=True, tokenize=False
-		)
-		super().__init__(model, tokenizer, prompt, None, [])
+		try:
+			prompt = tokenizer.apply_chat_template(
+				messages, add_generation_prompt=True, tokenize=False
+			)
+			self.chat_template_used = True
+		except:
+			pass
+		super().__init__(model, tokenizer, prompt, None, [], None, trim_toks=0)
 	def display_text(self):
-		return "Prompt: " + self.user_prompt + "\n\nResponse:\n\n"
+		if self.chat_template_used:
+			return "Prompt: " + self.user_prompt + "\n\nResponse:\n\n"
+		return super().display_text()
 
-"""
-# Example Use
-model, tokenizer = load("Llama-3.2-3B-Instruct-4bit")
-prompt = "Write a 4 chan greentext"
-root = Loom(model, tokenizer, prompt)
-
-assistant_start = root.add_text_child("> be me, ai language model\n")
-assistant_start.ramify(n=2, temp=0.8, max_tokens=32)
-
-greentexts = assistant_start.apply_at_leaves(
-	lambda x: x.ramify("\n> harambe returns from heaven"),
-	lambda x: x.ramify(n=2, temp=0.8, max_tokens=32),
-	lambda x: x.trim(10).ramify(["\n> seven angels descend from a pinhead", "\n> P = NP is solved"]),
-	lambda x: x.ramify(n=2, temp=0.8, max_tokens=64),
-	lambda x: x.crown()
-)
-
-for i, greentext in enumerate(greentexts):
-	print(f"Greentext {i+1}:\n{greentext}\n")
-"""

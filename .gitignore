@@ -1,0 +1,9 @@
+.aider*
+.env
+Llama-3.2-3B-8bit
+Llama-3.2-3B-Instruct-4bit
+Mistral-Small-24B-Instruct-4bit
+/dist
+mistralai
+src/n8loom.egg-info
+__pycache__

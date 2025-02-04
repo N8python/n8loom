@@ -5,7 +5,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Union
 import uvicorn
-from loom import Heddle, Loom
+import os
+from n8loom import Heddle, Loom
 from mlx_lm import load
 
 app = FastAPI()
@@ -247,6 +248,12 @@ def ramify_node(req: RamifyRequest):
         from fastapi.responses import StreamingResponse
         def event_generator():
             for update in result:
+                if 'children' in update:
+                    for child in update['children']:
+                        child_id = get_next_id("heddle_id")
+                        heddle_store[child_id] = child
+                        update['children'] = [child_id]
+                    update['children'] = len(update['children'])
                 yield json.dumps(update) + "\n"
         return StreamingResponse(event_generator(), media_type="application/json")
 
@@ -428,7 +435,11 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Join it with 'static' to get the full path
+static_dir = os.path.join(current_dir, "static")
+
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 @app.get("/")
 def read_root():

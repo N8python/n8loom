@@ -1,0 +1,10 @@
+[build-system]
+requires = ["setuptools>=64.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "n8loom"
+version = "0.1.0"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
