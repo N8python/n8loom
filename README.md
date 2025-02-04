@@ -24,7 +24,7 @@ It additionally provides a set of utilities to manage internal model caches, gen
   - [API Documentation](#api-documentation)
     - [Core Classes (`loom.py`)](#core-classes-loompy)
       - [`class Heddle`](#class-heddle)
-      - [`class Loom(Heddle)`](#class-loomheddle)
+      - [`class Loom` *(subclass of Heddle)*](#class-loom-subclass-of-heddle)
     - [Generation Utilities (`utils.py`)](#generation-utilities-utilspy)
     - [Cache Utilities (`cache_utils.py`)](#cache-utilities-cache_utilspy)
   - [Contributing](#contributing)
@@ -63,7 +63,7 @@ Below is an example (from `examples/reflection.py`) demonstrating how to load a 
 
 ```python
 from mlx_lm import load
-from n8loom import Loom  # Make sure n8loom is importable (e.g., added to __init__.py)
+from n8loom import Loom
 
 # Load the model and tokenizer
 model, tokenizer = load("Llama-3.2-3B-Instruct-4bit")
@@ -111,34 +111,190 @@ python src/n8loom/examples/server.py
 ## API Documentation
 
 ### Core Classes (`loom.py`)
-
 #### `class Heddle`
-A *Heddle* represents a node in a reasoning tree.
+
+A *Heddle* represents a node in a reasoning tree. Each node contains a segment of text, its tokenized form, cache fragments from the model, and potential child nodes. This structure enables branching reasoning and interactive exploration of model-generated responses.
 
 - **Attributes:**
+  - `model`: The language model (an instance of `nn.Module`) used for generating responses and cache fragments.
+  - `tokenizer`: The tokenizer (a `PreTrainedTokenizer` or `TokenizerWrapper`) used to encode text into tokens and decode tokens back to text.
   - `text`: The text content of this node.
-  - `tokens`: Tokenized representation (list of token IDs).
-  - `frag`: A list of cache fragments (KVFrag) corresponding to this node.
-  - `children`: List of child Heddle nodes.
-  - `parent`: Reference to the parent Heddle node.
-  - `terminal`: Boolean flag indicating if no further expansion is allowed.
+  - `tokens`: The tokenized representation (a list of token IDs) for the node’s text.
+  - `frag`: A list of cache fragments (`KVFrag`) that store model cache information corresponding to the tokens.
+  - `children`: A list of child Heddle nodes representing subsequent branches in the reasoning tree.
+  - `parent`: A reference to the parent Heddle node (or `None` if this node is the root).
+  - `terminal`: A Boolean flag indicating whether further expansion (generation) is disallowed.
+
+- **Constructor:**
+  - `__init__(model, tokenizer, text, frags, children, parent=None, trim_toks=1)`
+    - **Purpose:** Initializes a new Heddle node.
+    - **Parameters:**
+      - `model`: The language model to use.
+      - `tokenizer`: The tokenizer to encode/decode text.
+      - `text`: The text prompt for the node.
+      - `frags`: An optional list of pre-computed cache fragments. If `None`, the fragments are generated based on the text.
+      - `children`: An optional list of child nodes (defaults to an empty list if not provided).
+      - `parent`: The parent node (defaults to `None` for the root).
+      - `trim_toks`: The number of initial tokens to trim from the token list (default is 1).
 
 - **Key Methods:**
-  - `clip(token_limit: int)`: Clips the node’s tokens and cache fragments to a specified token limit.
-  - `trim(token_trim: int)`: Removes the last N tokens from the node and resets its children.
-  - `add_child(child: Heddle)`: Adds an existing node as a child.
-  - `add_text_child(text: str)`: Creates and adds a new child node from a text prompt.
-  - `ramify(arg: Optional[Union[str, List[str]]] = None, **kwargs)`: Expands the node by either adding text children or by sampling new responses using model generation.
-  - `make_children(...)`: Generates multiple children (branches) using batched model generation.
-  - `get_prefix_cache()`: Retrieves the cumulative cache from the root node up to the current node.
-  - Other utility methods for traversing, displaying, and counting nodes.
+  - `clip(token_limit: int)`
+    - **Purpose:** Clips the node’s tokens, text, and cache fragments to a specified token limit.
+    - **Details:**
+      - If `token_limit` is negative, it retains `len(tokens) + token_limit` tokens.
+      - If the number of tokens exceeds the limit, the node’s tokens are truncated, the text is updated via decoding, the cache fragments are clipped accordingly, and all children are removed.
+    - **Returns:** The current Heddle instance.
+  
+  - `trim(token_trim: int)`
+    - **Purpose:** Removes the last `token_trim` tokens from the node.
+    - **Details:** Internally calls `clip` with a negative token limit.
+    - **Returns:** The current Heddle instance.
+  
+  - `to_leaf()`
+    - **Purpose:** Converts the current node into a leaf node by removing all its children.
+    - **Returns:** The current Heddle instance.
+  
+  - `add_child(child: Heddle)`
+    - **Purpose:** Adds an existing Heddle node as a child.
+    - **Details:** Also sets the added child’s `parent` attribute to this node.
+    - **Returns:** The added child node.
+  
+  - `add_text_child(text: str)`
+    - **Purpose:** Creates a new child node from a text prompt and adds it as a child.
+    - **Returns:** The newly created child node.
+  
+  - `remove_child(child: Heddle)`
+    - **Purpose:** Removes a specified child node from the current node.
+    - **Returns:** The removed child node.
+  
+  - `get_prefix_cache() -> List[KVCache]`
+    - **Purpose:** Retrieves the cumulative cache from the root node up to the current node.
+    - **Details:** Collects and fuses cache fragments from all ancestor nodes to form a complete context cache.
+    - **Returns:** A list of fused `KVCache` objects.
+  
+  - `make_children(n: int = 4, temp: float = 0.8, max_tokens: int = 8, min_p: float = 0.05, **kwargs)`
+    - **Purpose:** Generates multiple child nodes using batched model generation.
+    - **Details:**
+      - Uses the current node’s cumulative cache as context.
+      - Calls a batched generation routine to generate new text completions.
+      - For each generated text, a new child is created.
+      - If generation signals termination (via an `ended` flag), the child is marked as terminal.
+      - Clears the model cache after generation.
+    - **Parameters:**
+      - `n`: Number of children to generate.
+      - `temp`: Sampling temperature.
+      - `max_tokens`: Maximum number of tokens to generate for each child.
+      - `min_p`: Minimum probability threshold for generation.
+    - **Returns:** A list of newly created child nodes.
+  
+  - `ramify(arg: Optional[Union[str, List[str]]] = None, **kwargs)`
+    - **Purpose:** Expands the node by either adding text children or by generating new responses.
+    - **Details:**
+      - If `arg` is a string, creates a single child using that text.
+      - If `arg` is a list of strings, creates a child for each string.
+      - If `arg` is not provided, uses model generation:
+        - If `stream=True` is provided in `kwargs`, streaming generation is used via `make_child_stream`.
+        - Otherwise, batched generation is performed via `make_children`.
+    - **Returns:** A single child, a list of children, or a streaming generator, depending on the input.
+  
+  - `make_child_stream(n: int = 4, temp: float = 0.8, max_tokens: int = 8, min_p: float = 0.05, **kwargs)`
+    - **Purpose:** Generates child nodes using a streaming generation process.
+    - **Details:**
+      - Yields incremental updates (as dictionaries) from the generation process.
+      - Upon receiving a final update (indicated by `"type": "final"`), creates child nodes from the generated texts.
+      - Clears the model cache after finalization.
+    - **Parameters:**
+      - `n`: Number of children to generate.
+      - `temp`: Sampling temperature.
+      - `max_tokens`: Maximum number of tokens to generate for each child.
+      - `min_p`: Minimum probability threshold for generation.
+    - **Yields:** Updates (as dictionaries) during the generation stream.
+    - **Returns:** A list of newly created child nodes after the final update.
+  
+  - `get_prefix_text(exclude: int = 0) -> str`
+    - **Purpose:** Retrieves concatenated text from all ancestor nodes (including the current node).
+    - **Parameters:**
+      - `exclude`: Number of initial nodes to exclude from the prefix (default is 0).
+    - **Returns:** A single string of the concatenated prefix text.
+  
+  - `get_display_text(exclude: int = 0) -> str`
+    - **Purpose:** Similar to `get_prefix_text` but uses each node's `display_text()` method.
+    - **Parameters:**
+      - `exclude`: Number of initial nodes to exclude (default is 0).
+    - **Returns:** A concatenated string suitable for display.
+  
+  - `crown() -> str`
+    - **Purpose:** Returns the cumulative text from the root node up to this node, excluding the root’s text.
+  
+  - `display_text() -> str`
+    - **Purpose:** Returns the text content of the current node.
+    - **Details:** This method may be overridden in subclasses to provide formatted or additional context.
+  
+  - `get_prefix_tokens(exclude: int = 0) -> List[int]`
+    - **Purpose:** Retrieves a concatenated list of token IDs from all ancestor nodes (including the current node).
+    - **Parameters:**
+      - `exclude`: Number of initial nodes to exclude (default is 0).
+    - **Returns:** A list of token IDs.
+  
+  - `apply_all_children(func: Callable[[Heddle], Any], apply_self: bool = False, leaves_only: bool = False) -> List[Any]`
+    - **Purpose:** Applies a given function to all descendant nodes.
+    - **Parameters:**
+      - `func`: A function that takes a Heddle node as input.
+      - `apply_self`: Whether to apply the function to the current node as well.
+      - `leaves_only`: If True, applies the function only to leaf nodes.
+    - **Returns:** A list of results from applying the function to the nodes.
+  
+  - `at_all_leaves(func: Callable[[Heddle], Any]) -> List[Any]`
+    - **Purpose:** Convenience method to apply a function only to all leaf nodes.
+    - **Returns:** A list of results from applying the function to each leaf.
+  
+  - `apply_at_leaves(*funcs: Callable[[Heddle], Any])`
+    - **Purpose:** Sequentially applies multiple functions to all leaf nodes.
+    - **Details:** All functions except the last are applied for their side effects; the final function’s results are returned.
+    - **Returns:** A list of results from the final function applied to each leaf.
+  
+  - `get_all_children(depth: int = 0) -> List[Heddle]`
+    - **Purpose:** Recursively retrieves all descendant nodes in the subtree.
+    - **Parameters:**
+      - `depth`: Used internally to decide whether to include the current node (included if `depth > 0`).
+    - **Returns:** A flat list of all descendant Heddle nodes.
+  
+  - `get_all_leaves() -> List[Heddle]`
+    - **Purpose:** Retrieves all leaf nodes (nodes with no children) in the subtree.
+    - **Returns:** A list of leaf nodes.
+  
+  - `count_children()`
+    - **Purpose:** Counts the total number of nodes in the subtree rooted at this node (including itself).
+    - **Returns:** An integer count of the nodes.
+  
+  - `count_leaves()`
+    - **Purpose:** Counts the total number of leaf nodes in the subtree.
+    - **Details:** If there are no children, returns 1 (the current node itself).
+    - **Returns:** An integer count of the leaf nodes.
+  
+  - `__repr__()`
+    - **Purpose:** Returns a string representation of the Heddle node.
+    - **Returns:** A string displaying the node’s text and a summary of its children.
+#### `class Loom` *(subclass of Heddle)*
 
-#### `class Loom(Heddle)`
-A *Loom* is a specialized Heddle that serves as the root of a reasoning tree. It is typically initialized with a user prompt and can optionally use a chat template.
+*Loom* is a specialized subclass of Heddle used as the root node in chat-based or conversational settings.
 
-- **Key Differences:**
-  - On initialization, it processes the prompt and applies a chat template if available.
-  - Its `display_text()` method shows a formatted prompt-response view.
+- **Additional Attributes:**
+  - `user_prompt`: The original prompt provided by the user.
+  - `chat_template_used`: A flag indicating whether a chat template was applied to the prompt.
+  
+- **Constructor:**
+  - `__init__(model, tokenizer, prompt)`
+    - **Purpose:** Initializes a Loom instance.
+    - **Details:**
+      - Stores the original user prompt.
+      - Attempts to apply a chat template via `tokenizer.apply_chat_template` (if available).
+      - Calls the Heddle constructor with appropriate parameters.
+  
+- **Overridden Methods:**
+  - `display_text() -> str`
+    - **Purpose:** Returns formatted text for display.
+    - **Details:** If a chat template was used, it prefixes the output with "Prompt:" followed by the original user prompt and then a "Response:" section. Otherwise, it returns the plain text as defined in Heddle.
 
 ### Generation Utilities (`utils.py`)
 
