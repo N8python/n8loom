@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "n8loom"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
     "annotated-types==0.7.0",
     "anyio==4.8.0",
@@ -22,7 +22,7 @@ dependencies = [
     "MarkupSafe==3.0.2",
     "mlx==0.22.0",
     "mlx-lm==0.21.1",
-    "numpy==2.2.2a",
+    "numpy==2.2.2",
     "packaging==24.2",
     "protobuf==5.29.3",
     "pydantic==2.10.6",

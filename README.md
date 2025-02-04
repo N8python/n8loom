@@ -102,6 +102,14 @@ for i, answer in enumerate(answers):
 
 The library also comes with an example FastAPI server (see `examples/server.py`) that exposes endpoints to manage models, create looms, expand nodes, and export/import reasoning trees.
 
+Make sure you have an mlx-lm model in the root directory (the parent directory of src). You can quickly do this w/:
+
+```bash
+pip install huggingface_hub hf_transfer
+
+huggingface-cli download --local-dir Llama-3.2-3B-Instruct-4bit mlx-community/Llama-3.2-3B-Instruct-4bit
+```
+
 #### To run the server locally:
 
 ```bash
