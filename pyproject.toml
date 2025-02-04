@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "n8loom"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
     "annotated-types==0.7.0",
     "anyio==4.8.0",
