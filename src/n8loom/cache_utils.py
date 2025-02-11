@@ -57,7 +57,7 @@ def frag_batch_gen(cache: List[KVCache], total_prompt_len: int, generated_length
 		frags.append(batch_frags)
 	return frags
 	
-def fuse_cache_frags(frags: List[List[KVFrag]]) -> List[KVCache]:
+def fuse_cache_frags(frags: List[List[KVFrag]], offset: int) -> List[KVCache]:
 	"""Fuses a list of key-value fragments into a list of model layer caches.
 
 	Args:
@@ -72,8 +72,15 @@ def fuse_cache_frags(frags: List[List[KVFrag]]) -> List[KVCache]:
 	"""
 	caches = []
 	for layer_frags in frags:
-		keys = mx.concat([frag.keys for frag in layer_frags], axis=2)
-		values = mx.concat([frag.values for frag in layer_frags], axis=2)
+		keys = mx.concat([
+			frag.keys 
+			for i, frag in enumerate(layer_frags)
+		], axis=2)
+
+		values = mx.concat([
+			frag.values 
+			for i, frag in enumerate(layer_frags)
+		], axis=2)		
 		cache = KVCache()
 		cache.keys = keys
 		cache.values = values

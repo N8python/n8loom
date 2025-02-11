@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Union
 import uvicorn
 import os
-from n8loom import Heddle, Loom
+from n8loom import Heddle, Loom, load_for_loom
 from mlx_lm import load
 
 app = FastAPI()
@@ -128,7 +128,7 @@ def load_model(req: LoadModelRequest):
     """
     if req.model_path not in model_store:
         # load model only if not already loaded
-        model, tokenizer = load(req.model_path)
+        model, tokenizer = load_for_loom(req.model_path)
         model_store[req.model_path] = {
             "model": model,
             "tokenizer": tokenizer
