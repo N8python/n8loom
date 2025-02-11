@@ -59,14 +59,16 @@ pip install n8loom
 
 ### Basic Script Example
 
+Note that n8loom only works w/ the llama architecture.
+
 Below is an example (from `examples/reflection.py`) demonstrating how to load a model, create a reasoning tree (a *Loom*), and expand it with multiple potential answers:
 
 ```python
 from mlx_lm import load
-from n8loom import Loom
+from n8loom import Loom, load_for_loom
 
 # Load the model and tokenizer
-model, tokenizer = load("Llama-3.2-3B-Instruct-4bit")
+model, tokenizer = load_for_loom("Llama-3.2-3B-Instruct-4bit")
 
 # Define a problem prompt
 prompt = (
